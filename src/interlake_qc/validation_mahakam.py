@@ -1,4 +1,4 @@
-"""Ablasi QC V0–V6 + metrik tanpa skor D2."""
+"""QC ablation V0–V6 + metrics without D2 scores."""
 
 from __future__ import annotations
 
@@ -14,12 +14,12 @@ def wse_valid(df: pd.DataFrame, fill: float = -999.0) -> pd.Series:
     return w.notna() & (w > fill)
 
 
-def mask_ketat(df: pd.DataFrame, cfg_ketat: dict, fill: float = -999.0) -> pd.Series:
+def mask_strict(df: pd.DataFrame, cfg_strict: dict, fill: float = -999.0) -> pd.Series:
     return (
         wse_valid(df, fill)
-        & (pd.to_numeric(df["quality_f"], errors="coerce") == cfg_ketat["quality_f"])
-        & (pd.to_numeric(df["partial_f"], errors="coerce") == cfg_ketat["partial_f"])
-        & (pd.to_numeric(df["dark_frac"], errors="coerce") < cfg_ketat["dark_frac_max"])
+        & (pd.to_numeric(df["quality_f"], errors="coerce") == cfg_strict["quality_f"])
+        & (pd.to_numeric(df["partial_f"], errors="coerce") == cfg_strict["partial_f"])
+        & (pd.to_numeric(df["dark_frac"], errors="coerce") < cfg_strict["dark_frac_max"])
     )
 
 
@@ -38,12 +38,12 @@ def build_variant_masks(
     btemp: pd.DataFrame,
     cfg: dict,
 ) -> dict[str, pd.Series]:
-    """Mask boolean indexed seperti swot untuk V0–V6."""
+    """Boolean masks indexed like swot for V0–V6."""
     fill = float(cfg["quality"]["fill_value"])
-    ketat = cfg["ketat"]
+    strict_cfg= cfg["strict"]
     k_bt = float(cfg["baseline_temporal"]["k_report"])
-    danau_a = cfg["pair"]["danau_a"]
-    danau_b = cfg["pair"]["danau_b"]
+    lake_a = cfg["pair"]["lake_a"]
+    lake_b = cfg["pair"]["lake_b"]
 
     sw = swot.copy()
     sw["time"] = pd.to_datetime(sw["time"], utc=True)
@@ -51,7 +51,7 @@ def build_variant_masks(
     d2["time"] = pd.to_datetime(d2["time"], utc=True)
     flagged = d2[d2["flag"].astype(bool)]
     flagged_times = set(pd.Timestamp(t) for t in flagged["time"])
-    src_map = {pd.Timestamp(r["time"]): str(r.get("sumber_akhir", "ambigu")) for _, r in flagged.iterrows()}
+    src_map = {pd.Timestamp(r["time"]): str(r.get("final_source", "ambiguous")) for _, r in flagged.iterrows()}
 
     bt = btemp.copy()
     bt["time"] = pd.to_datetime(bt["time"], utc=True)
@@ -68,9 +68,9 @@ def build_variant_masks(
     bt_flag = {
         name: set(
             pd.Timestamp(t)
-            for t in bt.loc[(bt["danau"] == name) & bt[fcol].astype(bool), "time"]
+            for t in bt.loc[(bt["lake"] == name) & bt[fcol].astype(bool), "time"]
         )
-        for name in (danau_a, danau_b)
+        for name in (lake_a, lake_b)
     }
 
     def sumber_at(t) -> str:
@@ -78,11 +78,11 @@ def build_variant_masks(
         for ft, s in src_map.items():
             if abs((ft - t).total_seconds()) <= 120:
                 return s
-        return "ambigu"
+        return "ambiguous"
 
     v0 = wse_valid(sw, fill)
     v1 = mask_q01(sw, fill)
-    v2 = mask_ketat(sw, ketat, fill)
+    v2 = mask_strict(sw, strict_cfg, fill)
     v3 = v1.copy()
     v4 = v1.copy()
     v5 = v1.copy()
@@ -90,23 +90,23 @@ def build_variant_masks(
 
     for i in sw.index:
         t = sw.loc[i, "time"]
-        danau = sw.loc[i, "danau"]
-        if danau not in (danau_a, danau_b):
+        lake_name= sw.loc[i, "lake"]
+        if lake_name not in (lake_a, lake_b):
             continue
         if _near(t, flagged_times):
             v3.loc[i] = False
             v6.loc[i] = False
             src = sumber_at(t)
-            if src == danau or src in ("ambigu", "tak bisa diatribusi", ""):
+            if src == lake_name or src in ("ambiguous", "unattributed", ""):
                 v4.loc[i] = False
-            # sumber = danau lain → pertahankan obs danau ini
-        if _near(t, bt_flag.get(danau, set())):
+            # source = other lake → keep this lake's observation
+        if _near(t, bt_flag.get(lake_name, set())):
             v5.loc[i] = False
 
     return {
         "V0_nofilter": v0,
         "V1_q01_SQRTL": v1,
-        "V2_ketat": v2,
+        "V2_strict": v2,
         "V3_V1_D2_both": v3,
         "V4_V1_D2_attr": v4,
         "V5_V1_Btemp": v5,
@@ -116,27 +116,31 @@ def build_variant_masks(
 
 def atl13_swot_metrics(
     swot_sub: pd.DataFrame,
-    atl: pd.DataFrame,
-    danau: str,
+    atl: pd.DataFrame, lake_name: str,
     max_days: float = 3.0,
 ) -> dict:
-    a = atl[atl["danau"] == danau].copy()
+    atl = atl.rename(columns={"danau": "lake", "tanggal": "date"})
+    if "lake" not in atl.columns and "danau" in atl.columns:
+        atl = atl.copy()
+        atl["lake"] = atl["danau"]
+    a = atl[atl["lake"] == lake_name].copy()
     if a.empty or swot_sub.empty:
-        return {"n_pasangan": 0, "median_diff_m": "", "mad_diff_m": "", "rmse_m": ""}
-    a["tanggal"] = pd.to_datetime(a["tanggal"], utc=True)
+        return {"n_pairs": 0, "median_diff_m": "", "mad_diff_m": "", "rmse_m": ""}
+    date_col = "date" if "date" in a.columns else "tanggal"
+    a["date"] = pd.to_datetime(a[date_col], utc=True)
     s = swot_sub.copy()
     s["time"] = pd.to_datetime(s["time"], utc=True)
     diffs = []
     for _, ar in a.iterrows():
-        dt = (s["time"] - ar["tanggal"]).abs()
+        dt = (s["time"] - ar["date"]).abs()
         j = dt.idxmin()
         if dt.loc[j] <= pd.Timedelta(days=max_days):
             diffs.append(float(ar["mean"]) - float(s.loc[j, "wse"]))
     if not diffs:
-        return {"n_pasangan": 0, "median_diff_m": "", "mad_diff_m": "", "rmse_m": ""}
+        return {"n_pairs": 0, "median_diff_m": "", "mad_diff_m": "", "rmse_m": ""}
     arr = np.asarray(diffs, dtype=float)
     return {
-        "n_pasangan": int(len(arr)),
+        "n_pairs": int(len(arr)),
         "median_diff_m": float(np.median(arr)),
         "mad_diff_m": float(mad(arr)),
         "rmse_m": float(np.sqrt(np.mean(arr**2))),
@@ -147,8 +151,8 @@ def interlake_atl13_metric(
     swot: pd.DataFrame,
     mask: pd.Series,
     atl_i: pd.DataFrame,
-    danau_a: str,
-    danau_b: str,
+    lake_a: str,
+    lake_b: str,
     max_days: float = 10.0,
     pair_name: str = "semayang_minus_melintang",
 ) -> dict:
@@ -157,14 +161,12 @@ def interlake_atl13_metric(
         ai = ai[ai["pair"] == pair_name]
     if ai.empty:
         return {"n_interlake": 0, "median_abs_dWSE_minus_dH": ""}
-    if "tanggal" in ai.columns:
-        ai["t"] = pd.to_datetime(ai["tanggal"], utc=True)
-    else:
-        ai["t"] = pd.to_datetime(ai.get("time"), utc=True)
+    _acol = "date" if "date" in ai.columns else ("tanggal" if "tanggal" in ai.columns else "time")
+    ai["t"] = pd.to_datetime(ai[_acol], utc=True)
     dH_col = "dH_ATL13" if "dH_ATL13" in ai.columns else "dH"
 
-    sa = swot.loc[mask & (swot["danau"] == danau_a)].copy()
-    sb = swot.loc[mask & (swot["danau"] == danau_b)].copy()
+    sa = swot.loc[mask & (swot["lake"] == lake_a)].copy()
+    sb = swot.loc[mask & (swot["lake"] == lake_b)].copy()
     sa["time"] = pd.to_datetime(sa["time"], utc=True)
     sb["time"] = pd.to_datetime(sb["time"], utc=True)
     diffs = []
@@ -224,22 +226,22 @@ def run_ablation_table(
     atl_i: pd.DataFrame,
     cfg: dict,
 ) -> pd.DataFrame:
-    lakes = [cfg["pair"]["danau_a"], cfg["pair"]["danau_b"]]
+    lakes = [cfg["pair"]["lake_a"], cfg["pair"]["lake_b"]]
     rows = []
     for vname, mask in masks.items():
         inter = interlake_atl13_metric(
             swot,
             mask,
             atl_i,
-            cfg["pair"]["danau_a"],
-            cfg["pair"]["danau_b"],
+            cfg["pair"]["lake_a"],
+            cfg["pair"]["lake_b"],
             float(cfg["coincidence"]["atl13_interlake_days"]),
             cfg["pair"]["name"],
         )
-        for danau in lakes:
-            sub = swot.loc[mask & (swot["danau"] == danau)].copy()
+        for lake_name in lakes:
+            sub = swot.loc[mask & (swot["lake"] == lake_name)].copy()
             m_atl = atl13_swot_metrics(
-                sub, atl, danau, float(cfg["coincidence"]["atl13_swot_days"])
+                sub, atl, lake_name, float(cfg["coincidence"]["atl13_swot_days"])
             )
             sm = smoothness_metrics(
                 sub,
@@ -249,8 +251,7 @@ def run_ablation_table(
             rows.append(
                 {
                     "variant": vname,
-                    "danau": danau,
-                    "n_kept": int(len(sub)),
+                    "lake": lake_name, "n_kept": int(len(sub)),
                     **m_atl,
                     **sm,
                     **inter,

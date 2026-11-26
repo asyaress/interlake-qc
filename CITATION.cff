@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use InterLake-QC, please cite it as below."
+type: software
+title: "InterLake-QC: same-pass inter-lake consistency check for SWOT lake water levels"
+version: "1.0.0"
+license: MIT
+repository-code: "https://github.com/asyaress/interlake-qc"
+authors:
+  - given-names: "Supriyanto"
+    family-names: "Supriyanto"
+    affiliation: "Department of Physics, Universitas Mulawarman, Samarinda, Indonesia"
+    orcid: "https://orcid.org/0009-0007-4541-0168"
+  - given-names: "Muhammad Ibadurrahman Arrasyid"
+    family-names: "Supriyanto"
+    affiliation: "Informatics Study Program, Faculty of Engineering, Universitas Mulawarman, Samarinda, Indonesia"
+    orcid: "https://orcid.org/0000-0002-0111-6334"
+  - given-names: "Chalsi Mala"
+    family-names: "Sari"
+    affiliation: "Civil Engineering, Universitas Mulawarman, Samarinda, Indonesia"
+    orcid: "https://orcid.org/0009-0006-7237-4206"
+  - given-names: "Athasyahri Syawal"
+    family-names: "Fahrezy"
+    affiliation: "Informatics, Universitas Mulawarman, Samarinda, Indonesia"
+    orcid: "https://orcid.org/0009-0005-0405-8888"
+keywords:
+  - SWOT
+  - lake water surface elevation
+  - quality control
+  - inter-lake consistency
+  - remote sensing
+  - InterLake-QC

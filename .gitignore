@@ -14,3 +14,6 @@ __pycache__/
 .DS_Store
 _bootstrap_f6a.py
 _patch_*.py
+_f6b_*.py
+_sha256_*.txt
+_cleantest/

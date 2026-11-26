@@ -21,7 +21,7 @@ baseline_temporal:
   mad_scale: 1.4826
   sigma_min_m: 0.02
 
-ketat:
+strict:
   quality_f: 0
   partial_f: 0
   dark_frac_max: 0.5

@@ -38,46 +38,46 @@ pair_match:
 pairs_v0:
   P1:
     name: monona_minus_waubesa
-    danau_a: monona
-    danau_b: waubesa
-    danau_tri: kegonsa
-    peran: utama_v0
+    lake_a: monona
+    lake_b: waubesa
+    lake_tri: kegonsa
+    role: primary_v0
   P2:
     name: waubesa_minus_kegonsa
-    danau_a: waubesa
-    danau_b: kegonsa
-    danau_tri: monona
-    peran: sekunder_v0
+    lake_a: waubesa
+    lake_b: kegonsa
+    lake_tri: monona
+    role: secondary_v0
   P3:
     name: mendota_minus_monona
-    danau_a: mendota
-    danau_b: monona
-    danau_tri: waubesa
-    peran: sekunder_v0
+    lake_a: mendota
+    lake_b: monona
+    lake_tri: waubesa
+    role: secondary_v0
 
 pairs:
   P1:
     name: monona_minus_waubesa
-    danau_a: monona
-    danau_b: waubesa
-    danau_tri: kegonsa
+    lake_a: monona
+    lake_b: waubesa
+    lake_tri: kegonsa
   P2:
     name: waubesa_minus_kegonsa
-    danau_a: waubesa
-    danau_b: kegonsa
-    danau_tri: monona
+    lake_a: waubesa
+    lake_b: kegonsa
+    lake_tri: monona
   P3:
     name: mendota_minus_monona
-    danau_a: mendota
-    danau_b: monona
-    danau_tri: waubesa
+    lake_a: mendota
+    lake_b: monona
+    lake_tri: waubesa
 
 truth:
   max_gage_dt_hours: 24
   T_main: 0.15
   T_sens: [0.10, 0.25]
 
-ketat:
+strict:
   quality_f: 0
   partial_f: 0
   dark_frac_max: 0.5
@@ -97,19 +97,19 @@ amendment_1:
   pairs:
     P2:
       name: waubesa_minus_kegonsa
-      danau_a: waubesa
-      danau_b: kegonsa
-      danau_tri: mendota
-      peran: utama
+      lake_a: waubesa
+      lake_b: kegonsa
+      lake_tri: mendota
+      role: primary
     P1:
       name: monona_minus_waubesa
-      danau_a: monona
-      danau_b: waubesa
-      danau_tri: kegonsa
-      peran: objek_kecil
+      lake_a: monona
+      lake_b: waubesa
+      lake_tri: kegonsa
+      role: small_object
     P3:
       name: mendota_minus_monona
-      danau_a: mendota
-      danau_b: monona
-      danau_tri: waubesa
-      peran: objek_kecil
+      lake_a: mendota
+      lake_b: monona
+      lake_tri: waubesa
+      role: small_object

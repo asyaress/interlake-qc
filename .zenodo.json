@@ -1,0 +1,42 @@
+{
+  "title": "InterLake-QC: same-pass inter-lake consistency check for SWOT lake water levels",
+  "upload_type": "software",
+  "license": "MIT",
+  "creators": [
+    {
+      "name": "Supriyanto, Supriyanto",
+      "affiliation": "Department of Physics, Universitas Mulawarman, Samarinda, Indonesia",
+      "orcid": "0009-0007-4541-0168"
+    },
+    {
+      "name": "Supriyanto, Muhammad Ibadurrahman Arrasyid",
+      "affiliation": "Informatics Study Program, Faculty of Engineering, Universitas Mulawarman, Samarinda, Indonesia",
+      "orcid": "0000-0002-0111-6334"
+    },
+    {
+      "name": "Sari, Chalsi Mala",
+      "affiliation": "Civil Engineering, Universitas Mulawarman, Samarinda, Indonesia",
+      "orcid": "0009-0006-7237-4206"
+    },
+    {
+      "name": "Fahrezy, Athasyahri Syawal",
+      "affiliation": "Informatics, Universitas Mulawarman, Samarinda, Indonesia",
+      "orcid": "0009-0005-0405-8888"
+    }
+  ],
+  "keywords": [
+    "SWOT",
+    "lake water surface elevation",
+    "quality control",
+    "inter-lake consistency",
+    "remote sensing",
+    "InterLake-QC"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "10.5066/P1FE9W9E",
+      "relation": "references",
+      "scheme": "doi"
+    }
+  ]
+}

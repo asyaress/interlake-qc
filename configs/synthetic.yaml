@@ -11,9 +11,9 @@ paths:
   out_dir: outputs/synthetic
 pair:
   name: semayang_minus_melintang
-  danau_a: semayang
-  danau_b: melintang
-  danau_tri: jempang
+  lake_a: semayang
+  lake_b: melintang
+  lake_tri: jempang
 quality:
   core:
   - 0
@@ -45,12 +45,12 @@ triangulation:
   k_tri: 2.5
   pairs:
   - name: semayang_minus_jempang
-    danau_a: semayang
-    danau_b: jempang
+    lake_a: semayang
+    lake_b: jempang
     points_to: semayang
   - name: melintang_minus_jempang
-    danau_a: melintang
-    danau_b: jempang
+    lake_a: melintang
+    lake_b: jempang
     points_to: melintang
 baseline_temporal:
   k_values:

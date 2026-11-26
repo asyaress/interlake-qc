@@ -39,7 +39,7 @@ def test_r5_ablation():
     assert_frame_close(
         pd.read_csv(OUT_M / "r5_ablation.csv"),
         pd.read_csv(REF / "r5_ablation.csv"),
-        key_cols=["variant", "danau"],
+        key_cols=["variant", "lake"],
         label="r5_ablation",
     )
 
@@ -49,7 +49,7 @@ def test_r5_btemp():
     ref = pd.read_csv(REF / "r5_btemp.csv")
     got["time"] = pd.to_datetime(got["time"], utc=True)
     ref["time"] = pd.to_datetime(ref["time"], utc=True)
-    assert_frame_close(got, ref, key_cols=["danau", "time"], label="r5_btemp")
+    assert_frame_close(got, ref, key_cols=["lake", "time"], label="r5_btemp")
 
 
 def test_r5_jempang_summary():

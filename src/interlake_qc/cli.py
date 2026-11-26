@@ -14,12 +14,20 @@ def _repo_root() -> Path:
 def cmd_run(config: Path) -> int:
     root = _repo_root()
     cfg_name = config.name.lower()
+    if "example" in cfg_name:
+        script = root / "scripts" / "run_example.py"
+        sys.argv = [str(script)]
+        runpy.run_path(str(script), run_name="__main__")
+        return 0
     if "yahara" in cfg_name:
         script = root / "scripts" / "21_run_yahara.py"
     elif "mahakam" in cfg_name:
         script = root / "scripts" / "20_run_mahakam.py"
     else:
-        print(f"Unknown config mapping for {config}; use mahakam.yaml or yahara.yaml", file=sys.stderr)
+        print(
+            f"Unknown config mapping for {config}; use example_pair.yaml, mahakam.yaml, or yahara.yaml",
+            file=sys.stderr,
+        )
         return 2
     sys.argv = [str(script), "--config", str(config)]
     runpy.run_path(str(script), run_name="__main__")

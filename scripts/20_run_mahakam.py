@@ -1,4 +1,4 @@
-"""R5 — D2 final (k per pita) + ablasi QC + perluasan Jempang."""
+"""R5 — D2 final (band k) + QC ablation + Jempang extension."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from interlake_qc.core import (  # noqa: E402
 from interlake_qc.validation_mahakam import (  # noqa: E402
     atl13_swot_metrics,
     build_variant_masks,
-    mask_ketat,
+    mask_strict,
     mask_q01,
     run_ablation_table,
 )
@@ -40,13 +40,13 @@ def plot_d2_final(res: pd.DataFrame, bins: pd.DataFrame, cfg: dict, out: Path) -
     core = res[res["core"]].copy() if "core" in res.columns else res.copy()
     flagged = core[core["flag"].astype(bool)]
     ok = core[~core["flag"].astype(bool)]
-    ax.scatter(ok["H"], ok["dWSE"], s=28, c="#4C78A8", alpha=0.8, label="tidak tertandai")
-    ax.scatter(flagged["H"], flagged["dWSE"], s=55, c="#E45756", marker="X", label="tertandai")
+    ax.scatter(ok["H"], ok["dWSE"], s=28, c="#4C78A8", alpha=0.8, label="not flagged")
+    ax.scatter(flagged["H"], flagged["dWSE"], s=55, c="#E45756", marker="X", label="flagged")
     for _, r in flagged.iterrows():
-        lab = f"{str(r['day'])[:10]}\n{r.get('sumber_akhir', '')}"
+        lab = f"{str(r['day'])[:10]}\n{r.get('final_source', '')}"
         ax.annotate(lab, (r["H"], r["dWSE"]), fontsize=6, xytext=(4, 4), textcoords="offset points")
 
-    # f(H) ± k·σ(H) dengan k per pita
+    # f(H) ± k·σ(H) with band-dependent k
     if len(bins):
         hs = np.linspace(float(core["H"].min()) - 0.05, float(core["H"].max()) + 0.05, 200)
         f_line, s_line = [], []
@@ -68,7 +68,7 @@ def plot_d2_final(res: pd.DataFrame, bins: pd.DataFrame, cfg: dict, out: Path) -
             alpha=0.25,
             label="f ± k(H)·σ",
         )
-        ax.axvline(h_thr, color="orange", ls="--", lw=1, label=f"batas H={h_thr}")
+        ax.axvline(h_thr, color="orange", ls="--", lw=1, label=f"H threshold={h_thr}")
     ax.set_xlabel("H (m)")
     ax.set_ylabel("dWSE (m)")
     ax.set_title(f"D2 final Semayang−Melintang (k≥{h_thr}: {k_high}; k<{h_thr}: {k_low})")
@@ -80,25 +80,25 @@ def plot_d2_final(res: pd.DataFrame, bins: pd.DataFrame, cfg: dict, out: Path) -
 
 
 def plot_ablation(abl: pd.DataFrame, out: Path) -> None:
-    lakes = list(abl["danau"].unique())
+    lakes = list(abl["lake"].unique())
     variants = list(abl["variant"].unique())
     fig, axes = plt.subplots(2, len(lakes), figsize=(5.5 * len(lakes), 8), sharex=True)
     if len(lakes) == 1:
         axes = np.array([[axes[0]], [axes[1]]])
     x = np.arange(len(variants))
-    for col, danau in enumerate(lakes):
-        sub = abl[abl["danau"] == danau].set_index("variant").reindex(variants)
+    for col, lake_name in enumerate(lakes):
+        sub = abl[abl["lake"] == lake_name].set_index("variant").reindex(variants)
         ax0 = axes[0, col]
         ax1 = axes[1, col]
         ax0.bar(x, pd.to_numeric(sub["n_kept"], errors="coerce"), color="#4C78A8")
-        ax0.set_title(f"{danau}: n dipertahankan")
+        ax0.set_title(f"{lake_name}: n retained")
         ax0.set_ylabel("n")
         ax0.set_xticks(x)
         ax0.set_xticklabels(variants, rotation=45, ha="right", fontsize=7)
         ax0.grid(True, axis="y", alpha=0.3)
         p95 = pd.to_numeric(sub["smooth_p95_abs_e"], errors="coerce")
         ax1.bar(x, p95, color="#F58518")
-        ax1.set_title(f"{danau}: P95 |e_lake|")
+        ax1.set_title(f"{lake_name}: P95 |e_lake|")
         ax1.set_ylabel("m")
         ax1.set_xticks(x)
         ax1.set_xticklabels(variants, rotation=45, ha="right", fontsize=7)
@@ -115,7 +115,7 @@ def flagged_table(
     atl_i: pd.DataFrame,
     cfg: dict,
 ) -> pd.DataFrame:
-    """Tabel pass tertandai final (langkah 5)."""
+    """Final flagged-pass table (step 5)."""
     fl = d2[d2["flag"].astype(bool)].copy()
     if fl.empty:
         return fl
@@ -136,14 +136,16 @@ def flagged_table(
     bt_times = {
         name: set(
             pd.Timestamp(t)
-            for t in bt.loc[(bt["danau"] == name) & bt[fcol].astype(bool), "time"]
+            for t in bt.loc[(bt["lake"] == name) & bt[fcol].astype(bool), "time"]
         )
-        for name in (cfg["pair"]["danau_a"], cfg["pair"]["danau_b"])
+        for name in (cfg["pair"]["lake_a"], cfg["pair"]["lake_b"])
     }
     ai = atl_i.copy()
     if "pair" in ai.columns:
         ai = ai[ai["pair"] == cfg["pair"]["name"]]
-    ai["t"] = pd.to_datetime(ai["tanggal"] if "tanggal" in ai.columns else ai.get("time"), utc=True)
+    _acol = "date" if "date" in ai.columns else ("tanggal" if "tanggal" in ai.columns else "time")
+    ai["t"] = pd.to_datetime(ai[_acol], utc=True)
+
     max_days = float(cfg["coincidence"]["atl13_interlake_days"])
 
     rows = []
@@ -160,14 +162,14 @@ def flagged_table(
             atl_hit = bool((dt_days <= max_days).any())
         rows.append(
             {
-                "tanggal": t.strftime("%Y-%m-%d"),
+                "date": t.strftime("%Y-%m-%d"),
                 "pass": r.get("pass", ""),
                 "H": r["H"],
                 "dWSE": r["dWSE"],
                 "z": r["z"],
-                "k": r["k_dipakai"],
-                "sumber_akhir": r.get("sumber_akhir", ""),
-                "cara_atribusi": r.get("cara_atribusi", ""),
+                "k": r["k_used"],
+                "final_source": r.get("final_source", ""),
+                "attribution_method": r.get("attribution_method", ""),
                 "quality_f_a": r.get("quality_f_a", r.get("q_a", "")),
                 "quality_f_b": r.get("quality_f_b", r.get("q_b", "")),
                 "dark_frac_a": r.get("dark_frac_a", ""),
@@ -180,30 +182,30 @@ def flagged_table(
 
 
 def run_jempang_extension(swot: pd.DataFrame, atl: pd.DataFrame, cfg: dict, out: Path) -> pd.DataFrame:
-    """Pasangan Melintang−Jempang: D2 + ringkasan filter + ATL13."""
+    """Pairs Melintang−Jempang: D2 + ringkasan filter + ATL13."""
     jp = dict(cfg)
     jp["pair"] = {
         "name": cfg["jempang_pair"]["name"],
-        "danau_a": cfg["jempang_pair"]["danau_a"],
-        "danau_b": cfg["jempang_pair"]["danau_b"],
+        "lake_a": cfg["jempang_pair"]["lake_a"],
+        "lake_b": cfg["jempang_pair"]["lake_b"],
     }
     pairs = prepare_pair_table(swot, jp)
-    # hanya q∈{0,1} untuk skor (core sudah q∈{0,1})
+    # q∈{0,1} only for scoring (core already q∈{0,1})
     lakes = {
-        jp["pair"]["danau_a"]: swot[swot["danau"] == jp["pair"]["danau_a"]].copy(),
-        jp["pair"]["danau_b"]: swot[swot["danau"] == jp["pair"]["danau_b"]].copy(),
+        jp["pair"]["lake_a"]: swot[swot["lake"] == jp["pair"]["lake_a"]].copy(),
+        jp["pair"]["lake_b"]: swot[swot["lake"] == jp["pair"]["lake_b"]].copy(),
     }
     d2j, bins_j = run_d2_final(pairs, lakes, jp, do_attribution=False, swot=None)
     d2j.to_csv(out / "r5_jempang_d2.csv", index=False)
     bins_j.to_csv(out / "r5_jempang_bins.csv", index=False)
 
     fill = float(cfg["quality"]["fill_value"])
-    jem = swot[swot["danau"] == "jempang"].copy()
-    n_ketat = int(mask_ketat(jem, cfg["ketat"], fill).sum())
+    jem = swot[swot["lake"] == "jempang"].copy()
+    n_ketat = int(mask_strict(jem, cfg["strict"], fill).sum())
     m_q01 = mask_q01(jem, fill)
     n_q01 = int(m_q01.sum())
 
-    # obs Jempang q01 + D2 (pass tidak tertandai pada pasangan MJ)
+    # Jempang obs q01 + D2 (pass not flagged on MJ pair)
     flagged_t = set(pd.Timestamp(t) for t in d2j.loc[d2j["flag"], "time"])
     jem["time"] = pd.to_datetime(jem["time"], utc=True)
     keep_d2 = []
@@ -222,17 +224,17 @@ def run_jempang_extension(swot: pd.DataFrame, atl: pd.DataFrame, cfg: dict, out:
     atl_d2 = atl13_swot_metrics(jem.loc[m_q01_d2], atl, "jempang", float(cfg["coincidence"]["atl13_swot_days"]))
 
     summary_rows = [
-        {"metric": "n_jempang_ketat", "value": n_ketat},
+        {"metric": "n_jempang_strict", "value": n_ketat},
         {"metric": "n_jempang_q01", "value": n_q01},
         {"metric": "n_jempang_q01_D2_clean", "value": n_q01_d2},
         {"metric": "n_pairs_MJ", "value": len(pairs)},
         {"metric": "n_core_MJ", "value": int(pairs["core"].sum()) if len(pairs) else 0},
         {"metric": "n_flagged_MJ", "value": int(d2j["flag"].sum())},
-        {"metric": "atl13_q01_n", "value": atl_q01["n_pasangan"]},
-        {"metric": "atl13_q01_median", "value": atl_q01["median_diff_m"]},
-        {"metric": "atl13_q01_mad", "value": atl_q01["mad_diff_m"]},
-        {"metric": "atl13_q01_rmse", "value": atl_q01["rmse_m"]},
-        {"metric": "atl13_q01D2_n", "value": atl_d2["n_pasangan"]},
+{"metric": "atl13_q01_n", "value": atl_q01["n_pairs"]},
+            {"metric": "atl13_q01_median", "value": atl_q01["median_diff_m"]},
+            {"metric": "atl13_q01_mad", "value": atl_q01["mad_diff_m"]},
+            {"metric": "atl13_q01_rmse", "value": atl_q01["rmse_m"]},
+            {"metric": "atl13_q01D2_n", "value": atl_d2["n_pairs"]},
         {"metric": "atl13_q01D2_median", "value": atl_d2["median_diff_m"]},
         {"metric": "atl13_q01D2_mad", "value": atl_d2["mad_diff_m"]},
         {"metric": "atl13_q01D2_rmse", "value": atl_d2["rmse_m"]},
@@ -270,8 +272,8 @@ def run_jempang_extension(swot: pd.DataFrame, atl: pd.DataFrame, cfg: dict, out:
     ax.set_xlabel("H (m)")
     ax.set_ylabel("dWSE Melintang−Jempang (m)")
     ax.set_title(
-        f"Jempang extension: ketat={n_ketat}, q01={n_q01}, q01+D2={n_q01_d2} "
-        f"(pembanding ketat=4)"
+        f"Jempang extension: strict={n_ketat}, q01={n_q01}, q01+D2={n_q01_d2} "
+        f"(baseline strict=4)"
     )
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=8)
@@ -291,7 +293,8 @@ def main() -> int:
     out = REPO / cfg["paths"]["out_dir"]
     out.mkdir(parents=True, exist_ok=True)
 
-    swot = pd.read_csv(REPO / cfg["paths"]["r2_swot_with_pass"])
+    from interlake_qc.schema import normalize_swot_frame
+    swot = normalize_swot_frame(pd.read_csv(REPO / cfg["paths"]["r2_swot_with_pass"]))
     swot["time"] = pd.to_datetime(swot["time"], utc=True, errors="coerce")
     phase_path = REPO / cfg["paths"]["r3_dwse_with_phase"]
     phase_df = pd.read_csv(phase_path) if phase_path.exists() else None
@@ -299,17 +302,17 @@ def main() -> int:
     pairs = prepare_pair_table(swot, cfg, phase_df=phase_df)
 
     lakes = {
-        cfg["pair"]["danau_a"]: swot[swot["danau"] == cfg["pair"]["danau_a"]].copy(),
-        cfg["pair"]["danau_b"]: swot[swot["danau"] == cfg["pair"]["danau_b"]].copy(),
+        cfg["pair"]["lake_a"]: swot[swot["lake"] == cfg["pair"]["lake_a"]].copy(),
+        cfg["pair"]["lake_b"]: swot[swot["lake"] == cfg["pair"]["lake_b"]].copy(),
     }
 
     print("=== D2 FINAL ===", flush=True)
     d2, bins = run_d2_final(pairs, lakes, cfg, do_attribution=True, swot=swot)
-    d2 = attach_obs_qc(d2, swot, cfg["pair"]["danau_a"], cfg["pair"]["danau_b"])
-    # simpan kolom yang diminta
+    d2 = attach_obs_qc(d2, swot, cfg["pair"]["lake_a"], cfg["pair"]["lake_b"])
+    # save requested columns
     cols = [
-        "time", "pass", "H", "dWSE", "f_H", "sigma_H", "z", "k_dipakai", "flag",
-        "sumber_tri", "sumber_temporal", "sumber_akhir", "cara_atribusi",
+        "time", "pass", "H", "dWSE", "f_H", "sigma_H", "z", "k_used", "flag",
+        "triangulation_source", "temporal_source", "final_source", "attribution_method",
         "quality_f_a", "quality_f_b", "dark_frac_a", "dark_frac_b",
         "q_a", "q_b", "core", "day",
     ]
@@ -322,13 +325,14 @@ def main() -> int:
     print("=== B-temp ===", flush=True)
     btemp = run_btemp_all_lakes(
         swot,
-        [cfg["pair"]["danau_a"], cfg["pair"]["danau_b"], cfg["pair"]["danau_tri"]],
+        [cfg["pair"]["lake_a"], cfg["pair"]["lake_b"], cfg["pair"]["lake_tri"]],
         cfg["baseline_temporal"],
     )
     btemp.to_csv(out / "r5_btemp.csv", index=False)
 
-    print("=== ABLASI ===", flush=True)
+    print("=== ABLATION ===", flush=True)
     atl = pd.read_csv(REPO / cfg["paths"]["r1_atl13_daily_v2"])
+    atl = atl.rename(columns={"danau": "lake", "tanggal": "date"})
     atl_i = pd.read_csv(REPO / cfg["paths"]["r2_atl13_interlake"])
     masks = build_variant_masks(swot, d2, btemp, cfg)
     abl = run_ablation_table(swot, masks, atl, atl_i, cfg)
@@ -336,7 +340,7 @@ def main() -> int:
     plot_ablation(abl, out)
     print(abl.to_string(index=False), flush=True)
 
-    print("=== PASS TERTANDAI ===", flush=True)
+    print("=== FLAGGED PASSES ===", flush=True)
     flagged = flagged_table(d2, btemp, atl_i, cfg)
     flagged.to_csv(out / "r5_flagged_passes.csv", index=False)
     print(flagged.to_string(index=False), flush=True)
@@ -345,7 +349,7 @@ def main() -> int:
     jsum = run_jempang_extension(swot, atl, cfg, out)
     print(jsum.to_string(index=False), flush=True)
 
-    print("R5 selesai.", flush=True)
+    print("R5 done.", flush=True)
     return 0
 
 

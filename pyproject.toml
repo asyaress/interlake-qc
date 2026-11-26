@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "interlake-qc"
-version = "0.1.0"
+version = "1.0.0"
 description = "Same-pass inter-lake consistency check (InterLake-QC) for SWOT lake water levels"
 readme = "README.md"
 license = { text = "MIT" }

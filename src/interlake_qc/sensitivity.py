@@ -1,4 +1,4 @@
-"""R6 — OAT sensitivitas, LOYO, kurva per-pass, S1 ringkas."""
+"""R6 — OAT sensitivity, LOYO, per-pass curves, compact S1."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def _band(h: float, thr: float = 2.5) -> str:
 
 
 def apply_params_to_cfg(base_cfg: dict, params: dict) -> dict:
-    """Salin cfg dan tulis parameter OAT ke reference_curve / detection_final."""
+    """Copy cfg and write OAT parameters into reference_curve / detection_final."""
     cfg = copy.deepcopy(base_cfg)
     rc = cfg.setdefault("reference_curve", {})
     df = cfg.setdefault("detection_final", {})
@@ -46,9 +46,9 @@ def apply_params_to_cfg(base_cfg: dict, params: dict) -> dict:
 
 
 def build_oat_configs(r6: dict) -> list[dict]:
-    """Daftar konfigurasi OAT: tiap (param, nilai) dengan parameter lain = default.
+    """OAT config list: each (param, value) with other params at default.
 
-    Setiap entri: varied_param, value, params (dict lengkap), config_id.
+    Each entry: varied_param, value, params (full dict), config_id.
     """
     defaults = dict(r6["defaults"])
     rows = []
@@ -70,9 +70,9 @@ def build_oat_configs(r6: dict) -> list[dict]:
 
 
 def oat_differs_by_one(cfg_params: dict, defaults: dict) -> bool:
-    """True bila tepat satu kunci berbeda dari default (atau nol = default murni)."""
+    """True if exactly one key differs from default (or zero = pure default)."""
     diffs = [k for k in defaults if cfg_params.get(k) != defaults[k]]
-    # juga kunci ekstra
+    # also extra keys
     return len(diffs) <= 1
 
 
@@ -88,7 +88,7 @@ def run_real_flags(
     lake_series: dict[str, pd.DataFrame],
     cfg: dict,
 ) -> pd.DataFrame:
-    """D2 final tanpa atribusi (untuk OAT cepat)."""
+    """D2 final without attribution (fast OAT)."""
     res, _ = run_d2_final(pairs, lake_series, cfg, do_attribution=False, swot=None)
     return res
 
@@ -102,16 +102,16 @@ def compact_s1(
     frac: float = 0.10,
     seed: int = 42,
 ) -> pd.DataFrame:
-    """S1 ringkas: sisip ke data nyata, tanpa pra-saring, hanya D2 banded-k.
+    """Compact S1: inject into real data, no pre-filter, D2 banded-k only.
 
-    Kembalikan recall & additional_fp_rate per (delta, h_band).
-    Pita H memakai ambang default 2.5 untuk pelaporan (bukan batas_H OAT),
-    agar metrik antar-konfigurasi sebanding; deteksi tetap memakai k per pita cfg.
+    Return recall & additional_fp_rate per (delta, h_band).
+    H band uses default threshold 2.5 for reporting (not OAT H bound),
+    so metrics are comparable across configs; detection still uses cfg band-dependent k.
     """
     deltas = deltas or [0.20, 0.30]
-    danau_a = cfg["pair"]["danau_a"]
-    danau_b = cfg["pair"]["danau_b"]
-    lakes = [danau_a, danau_b]
+    lake_a = cfg["pair"]["lake_a"]
+    lake_b = cfg["pair"]["lake_b"]
+    lakes = [lake_a, lake_b]
 
     pairs = pairs_all[pairs_all["core"]].copy().reset_index(drop=True)
     pairs["time"] = pd.to_datetime(pairs["time"], utc=True)
@@ -145,7 +145,7 @@ def compact_s1(
             pairs_m = pairs.copy()
             for i, lake in inj_lake.items():
                 s = signs[i]
-                if lake == danau_a:
+                if lake == lake_a:
                     pairs_m.loc[i, "wse_a"] = float(pairs_m.loc[i, "wse_a"]) + s * delta
                 else:
                     pairs_m.loc[i, "wse_b"] = float(pairs_m.loc[i, "wse_b"]) + s * delta
@@ -154,12 +154,12 @@ def compact_s1(
                     float(pairs_m.loc[i, "wse_a"]) + float(pairs_m.loc[i, "wse_b"])
                 )
 
-            # lake series tidak diubah untuk deteksi D2 antar-danau (hanya pairs)
+            # lake series unchanged for inter-lake D2 detection (pairs only)
             res_m = run_real_flags(pairs_m, lake_series0, cfg)
             flagged = res_m["flag"].astype(bool).to_numpy()
 
             for i in range(n):
-                # band dari H asli (sebelum inject) agar pelaporan stabil
+                # band from original H (pre-inject) for stable reporting
                 band = _band(float(pairs.loc[i, "H"]), 2.5)
                 key = (float(delta), band)
                 if i in inj_set:
@@ -198,12 +198,12 @@ def run_oat(
     r6: dict,
     seed: int = 42,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, list[str]]]:
-    """Jalankan semua OAT; kembalikan (oat_table, flag_frequency, flagged_dates_by_cfg)."""
+    """Run all OAT; return (oat_table, flag_frequency, flagged_dates_by_cfg)."""
     configs = build_oat_configs(r6)
     s1cfg = r6["s1_compact"]
     oat_rows = []
     flagged_map: dict[str, list[str]] = {}
-    # untuk frekuensi: hanya konfigurasi unik (param tuple)
+    # for frequency: unique configs only (param tuple)
     unique_flags: dict[tuple, set[str]] = {}
     unique_order: list[tuple] = []
 
@@ -220,7 +220,7 @@ def run_oat(
             unique_flags[ukey] = set(dates)
             unique_order.append(ukey)
         else:
-            # sama — pastikan set tanggal konsisten
+            # same — keep date sets consistent
             unique_flags[ukey] = set(dates)
 
         print(
@@ -255,7 +255,7 @@ def run_oat(
 
     oat_df = pd.DataFrame(oat_rows)
 
-    # frekuensi: semua tanggal yang pernah tertandai di config unik mana pun
+    # frequency: all dates flagged under any unique config
     n_unique = len(unique_order)
     all_dates: set[str] = set()
     for s in unique_flags.values():
@@ -265,7 +265,7 @@ def run_oat(
         n_hit = sum(1 for uk in unique_order if d in unique_flags[uk])
         freq_rows.append(
             {
-                "tanggal": d,
+                "date": d,
                 "n_configs_flagged": n_hit,
                 "n_unique_configs": n_unique,
                 "freq": n_hit / n_unique if n_unique else float("nan"),
@@ -281,9 +281,9 @@ def leave_one_year_out(
     years: list[int],
     default_flagged: set[str] | None = None,
 ) -> pd.DataFrame:
-    """Kurva acuan dari tahun ≠ Y; z + flag untuk pass tahun Y dengan k default.
+    """Reference curve from years ≠ Y; z + flag for year-Y passes with default k.
 
-    Tidak memakai data tahun Y dalam kurva (bukan LOO per-pass).
+    Does not use year-Y data in the curve (not per-pass LOO).
     """
     rc = base_cfg["reference_curve"]
     d = base_cfg["detection_final"]
@@ -325,17 +325,17 @@ def leave_one_year_out(
             day = pd.Timestamp(row["time"]).strftime("%Y-%m-%d")
             in_default = day in default_flagged
             if flag and in_default:
-                vs = "sama"
+                vs = "same"
             elif flag and not in_default:
-                vs = "tambah"
+                vs = "added"
             elif (not flag) and in_default:
-                vs = "hilang"
+                vs = "lost"
             else:
-                vs = "tetap_bersih"
+                vs = "stays_clean"
             rows.append(
                 {
                     "year_held_out": Y,
-                    "tanggal": day,
+                    "date": day,
                     "pass": row.get("pass", ""),
                     "H": row["H"],
                     "dWSE": row["dWSE"],
@@ -357,7 +357,7 @@ def by_pass_curves(
     base_cfg: dict,
     passes: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Kurva f(H), σ(H) terpisah untuk pass 284 dan 437."""
+    """Separate f(H), σ(H) curves for passes 284 and 437."""
     passes = passes or ["284", "437"]
     rc = base_cfg["reference_curve"]
     p = pairs.copy()
@@ -377,16 +377,16 @@ def by_pass_curves(
         )
         curves[ps] = bins
 
-    # gabung per pusat bin mendekati
-    # bangun grid dari gabungan pusat
+    # merge by nearest bin centers
+    # build grid from combined centers
     all_centers = sorted(
         {float(c) for b in curves.values() for c in b["center"].tolist()} if curves else []
     )
-    # lebih baik: align by overlapping bin edges — gunakan interp di pusat gabungan
+    # better: align by overlapping bin edges — interpolate at combined centers
     if not all_centers:
         return pd.DataFrame()
 
-    # gunakan pusat dari pass pertama sebagai basis + pusat kedua
+    # use centers from first pass as basis + second-pass centers
     centers = sorted(set(all_centers))
     rows = []
     for c in centers:
@@ -399,7 +399,7 @@ def by_pass_curves(
                 rec[f"n_{ps}"] = 0
                 continue
             f, s = interp_f_sigma(c, bins)
-            # n: bin terdekat
+            # n: nearest bin
             j = int(np.argmin(np.abs(bins["center"].to_numpy() - c)))
             n_j = int(bins.iloc[j]["n"]) if abs(float(bins.iloc[j]["center"]) - c) < 0.2 else 0
             rec[f"f_{ps}"] = f
@@ -410,12 +410,12 @@ def by_pass_curves(
             rec["sigma_diff_284_minus_437"] = rec.get("sigma_284", np.nan) - rec.get("sigma_437", np.nan)
         rows.append(rec)
 
-    # juga tabel bin mentah sejajar lebih informatif: merge on nearest center
-    # Tambahan: baris per-bin asli masing-masing
+    # raw bin tables aligned by nearest center are more informative
+    # Extra: per-bin rows from each pass
     raw_rows = []
     b284 = curves.get("284", pd.DataFrame())
     b437 = curves.get("437", pd.DataFrame())
-    # gunakan union of bin_lo
+    # use union of bin_lo
     keys = []
     if len(b284):
         for _, r in b284.iterrows():

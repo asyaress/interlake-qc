@@ -12,7 +12,7 @@ from interlake_qc.common import band_of
 
 
 def _spearmanr(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
-    """Spearman ρ + p-value dua sisi (aproksimasi t), tanpa SciPy."""
+    """Spearman ρ + two-sided p-value (t approximation), without SciPy."""
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     n = len(x)
@@ -30,8 +30,8 @@ def _spearmanr(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
     if abs(rho) >= 1:
         return rho, 0.0
     t = rho * np.sqrt((n - 2) / (1 - rho * rho))
-    # regularized incomplete beta approx for p — gunakan erfc untuk normal besar n
-    # dua sisi dari normal: z≈t
+    # regularized incomplete beta approx for p — use erfc for large-n normal
+    # two-sided normal: z≈t
     from math import erfc, sqrt
 
     p = float(erfc(abs(t) / sqrt(2.0)))
@@ -45,11 +45,13 @@ def atl13_swot_table(
     window_days: float = 10.0,
     pair_name: str = "semayang_minus_melintang",
 ) -> pd.DataFrame:
-    """Untuk tiap tanggal ATL13 antar-danau, semua pass SWOT q∈{0,1} dalam ±window_days."""
+    """For each inter-lake ATL13 date, all SWOT passes q∈{0,1} within ±window_days."""
     ai = atl_i.copy()
     if "pair" in ai.columns:
         ai = ai[ai["pair"] == pair_name]
-    if "tanggal" in ai.columns:
+    if "date" in ai.columns:
+        ai["t_atl"] = pd.to_datetime(ai["date"], utc=True)
+    elif "tanggal" in ai.columns:
         ai["t_atl"] = pd.to_datetime(ai["tanggal"], utc=True)
     else:
         ai["t_atl"] = pd.to_datetime(ai.get("time"), utc=True)
@@ -72,10 +74,10 @@ def atl13_swot_table(
         if near.empty:
             rows.append(
                 {
-                    "tanggal_atl13": t_atl.strftime("%Y-%m-%d"),
+                    "date_atl13": t_atl.strftime("%Y-%m-%d"),
                     "dH_ATL13": dH,
                     "H_ATL13": H_atl,
-                    "swot_tanggal": "",
+                    "swot_date": "",
                     "dt_days": "",
                     "dWSE": "",
                     "H": "",
@@ -89,16 +91,16 @@ def atl13_swot_table(
             t = pd.Timestamp(pr["time"])
             dt = abs((t - t_atl).total_seconds()) / 86400.0
             # dark_frac from swot per lake
-            def _dark(danau: str) -> float:
-                sub = sw[(sw["danau"] == danau) & ((sw["time"] - t).abs() <= pd.Timedelta(seconds=120))]
+            def _dark(lake_name: str) -> float:
+                sub = sw[(sw["lake"] == lake_name) & ((sw["time"] - t).abs() <= pd.Timedelta(seconds=120))]
                 return float(sub.iloc[0]["dark_frac"]) if len(sub) else float("nan")
 
             rows.append(
                 {
-                    "tanggal_atl13": t_atl.strftime("%Y-%m-%d"),
+                    "date_atl13": t_atl.strftime("%Y-%m-%d"),
                     "dH_ATL13": dH,
                     "H_ATL13": H_atl,
-                    "swot_tanggal": t.strftime("%Y-%m-%d"),
+                    "swot_date": t.strftime("%Y-%m-%d"),
                     "dt_days": dt,
                     "dWSE": float(pr["dWSE"]),
                     "H": float(pr["H"]),
@@ -111,7 +113,7 @@ def atl13_swot_table(
 
 
 def summarize_by_h_band(tbl: pd.DataFrame) -> pd.DataFrame:
-    """Median (dWSE terdekat − dH_ATL13) per pita H."""
+    """Median (nearest dWSE − dH_ATL13) per H band."""
     if tbl.empty:
         return pd.DataFrame()
     t = tbl.copy()
@@ -127,7 +129,7 @@ def summarize_by_h_band(tbl: pd.DataFrame) -> pd.DataFrame:
     ]:
         # nearest SWOT per ATL13 date
         diffs = []
-        for tanggal, g in sub0.groupby("tanggal_atl13"):
+        for date, g in sub0.groupby("date_atl13"):
             j = g["dt_days"].idxmin()
             diffs.append(float(g.loc[j, "dWSE"]) - float(g.loc[j, "dH_ATL13"]))
         rows.append(
@@ -146,7 +148,7 @@ def spearman_resid_dark(
     d2: pd.DataFrame,
     swot: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Spearman residu D2 (dWSE−f(H)) vs dark_frac Sem/Mel/selisih, per pita H."""
+    """Spearman of D2 residual (dWSE−f(H)) vs dark_frac Sem/Mel/diff, per H band."""
     p = pairs[pairs["core"]].copy()
     p["time"] = pd.to_datetime(p["time"], utc=True)
     d = d2.copy()
@@ -157,8 +159,8 @@ def spearman_resid_dark(
     sw["time"] = pd.to_datetime(sw["time"], utc=True)
     sw["dark_frac"] = pd.to_numeric(sw["dark_frac"], errors="coerce")
 
-    def dark_at(t, danau):
-        sub = sw[(sw["danau"] == danau) & ((sw["time"] - t).abs() <= pd.Timedelta(seconds=120))]
+    def dark_at(t, lake_name):
+        sub = sw[(sw["lake"] == lake_name) & ((sw["time"] - t).abs() <= pd.Timedelta(seconds=120))]
         return float(sub.iloc[0]["dark_frac"]) if len(sub) else float("nan")
 
     m["dark_sem"] = [dark_at(t, "semayang") for t in m["time"]]
@@ -215,8 +217,8 @@ def anomaly_20250805(
             sig = float(d.loc[j, "sigma_H"])
             z = float(d.loc[j, "z"])
 
-        def grab(danau):
-            s = sw[(sw["danau"] == danau) & ((sw["time"] - r["time"]).abs() <= pd.Timedelta(seconds=120))]
+        def grab(lake_name):
+            s = sw[(sw["lake"] == lake_name) & ((sw["time"] - r["time"]).abs() <= pd.Timedelta(seconds=120))]
             if not len(s):
                 return float("nan"), float("nan")
             return float(s.iloc[0]["dark_frac"]), float(s.iloc[0].get("area_total", float("nan")))
@@ -225,7 +227,7 @@ def anomaly_20250805(
         dm, am = grab("melintang")
         rows.append(
             {
-                "tanggal": date,
+                "date": date,
                 "dWSE": float(r["dWSE"]),
                 "H": float(r["H"]),
                 "f_H": f_h,
@@ -247,13 +249,13 @@ def table_d_consistency(repo: Path, cfg: dict) -> pd.DataFrame:
     """6 baris beda file vs Hydrocron + dWSE file vs HC."""
     bad = pd.read_csv(repo / cfg["paths"]["r3_hydrocron_consistency_bad"])
     rows = []
-    for tanggal in ("2025-05-08", "2025-05-13"):
-        sub = bad[bad["time_str"].astype(str).str.contains(tanggal)]
+    for date in ("2025-05-08", "2025-05-13"):
+        sub = bad[bad["time_str"].astype(str).str.contains(date)]
         for _, r in sub.iterrows():
             rows.append(
                 {
-                    "tanggal": tanggal,
-                    "danau": r.get("danau", r.get("danau_hc", "")),
+                    "date": date,
+                    "lake": r.get("lake", r.get("danau_hc", "")),
                     "granule_name": r.get("granule_name", ""),
                     "crid": r.get("crid", ""),
                     "source_zip": r.get("source_zip", ""),
@@ -268,15 +270,15 @@ def table_d_consistency(repo: Path, cfg: dict) -> pd.DataFrame:
                     "dWSE_file_minus_hc": "",
                 }
             )
-        sem = sub[sub["danau"] == "semayang"]
-        mel = sub[sub["danau"] == "melintang"]
+        sem = sub[sub["lake"] == "semayang"]
+        mel = sub[sub["lake"] == "melintang"]
         if len(sem) and len(mel):
             dwse_f = float(sem.iloc[0]["wse"]) - float(mel.iloc[0]["wse"])
             dwse_h = float(sem.iloc[0]["wse_hc"]) - float(mel.iloc[0]["wse_hc"])
             rows.append(
                 {
-                    "tanggal": tanggal,
-                    "danau": "PAIR_sem_minus_mel",
+                    "date": date,
+                    "lake": "PAIR_sem_minus_mel",
                     "granule_name": sem.iloc[0].get("granule_name", ""),
                     "crid": sem.iloc[0].get("crid", ""),
                     "source_zip": sem.iloc[0].get("source_zip", ""),

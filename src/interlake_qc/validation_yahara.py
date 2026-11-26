@@ -1,4 +1,4 @@
-"""R7b — muat/bersihkan data Yahara, tabel pass, kebenaran lapangan, metrik."""
+"""R7b — load/clean Yahara data, pass tables, field truth, metrics."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def load_r7_config(repo: Path, path: str = "configs/yahara.yaml") -> dict:
 
 
 def wilson_ci(successes: int, n: int, z: float = 1.96) -> tuple[float, float, float]:
-    """Proporsi + IK 95% Wilson. Kembalikan (p, lo, hi); NaN bila n=0."""
+    """Proportion + 95% Wilson CI. Return (p, lo, hi); NaN if n=0."""
     if n <= 0:
         return float("nan"), float("nan"), float("nan")
     p = successes / n
@@ -62,12 +62,12 @@ def load_yahara_raw(repo: Path, cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame, 
             low_memory=False,
         )
     else:
-        sites = pd.DataFrame(columns=["gage_id", "lake_id", "danau", "p_ref_area"])
+        sites = pd.DataFrame(columns=["gage_id", "lake_id", "lake", "p_ref_area"])
     id_map = {name: str(v["lake_id"]) for name, v in cfg["lakes"].items()}
     keep_ids = set(id_map.values())
     exclude = set(str(x) for x in cfg.get("exclude_lake_ids", []))
 
-    # cetak sebelum buang
+    # print before drop
     pre_excl = gage[gage["lake_id"].isin(keep_ids | exclude)].copy()
     counts_pre = (
         pre_excl.groupby(["lake_id", "SWOT_data_version"]).size().rename("n").reset_index()
@@ -94,10 +94,10 @@ def load_yahara_raw(repo: Path, cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame, 
             gage[c] = pd.to_numeric(gage[c], errors="coerce")
     gage["SWOT_time"] = pd.to_datetime(gage["SWOT_time"], utc=True, errors="coerce")
     gage["gage_time_UTC"] = pd.to_datetime(gage["gage_time_UTC"], utc=True, errors="coerce")
-    # nama danau
+    # lake name
     rev = {v: k for k, v in id_map.items()}
-    gage["danau"] = gage["lake_id"].map(rev)
-    sites["danau"] = sites["lake_id"].map(rev)
+    gage["lake"] = gage["lake_id"].map(rev)
+    sites["lake"] = sites["lake_id"].map(rev)
     if "p_ref_area" in sites.columns:
         sites["p_ref_area"] = pd.to_numeric(sites["p_ref_area"], errors="coerce")
 
@@ -105,21 +105,21 @@ def load_yahara_raw(repo: Path, cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame, 
 
 
 def dedup_prefer_D(gage: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Dedup kunci (lake_id, cycle_id, pass_id, SWOT_time detik); utamakan versi D.
+    """Dedup key (lake_id, cycle_id, pass_id, SWOT_time seconds); prefer version D.
 
-    Kembalikan (deduped_all_versions_prefer_D, stats_before_after).
+    Return (deduped_all_versions_prefer_D, stats_before_after).
     """
     g = gage.copy()
     g["t_sec"] = g["SWOT_time"].dt.floor("s")
     key = ["lake_id", "cycle_id", "pass_id", "t_sec"]
-    before = g.groupby(["danau", "SWOT_data_version"]).size().rename("n_before").reset_index()
+    before = g.groupby(["lake", "SWOT_data_version"]).size().rename("n_before").reset_index()
 
     # sort: D first, then keep first of key
     g["_prefer"] = (g["SWOT_data_version"].astype(str) != "D").astype(int)
     g = g.sort_values(key + ["_prefer"]).drop_duplicates(key, keep="first")
     g = g.drop(columns=["_prefer"])
-    after = g.groupby(["danau", "SWOT_data_version"]).size().rename("n_after").reset_index()
-    stats = before.merge(after, on=["danau", "SWOT_data_version"], how="outer").fillna(0)
+    after = g.groupby(["lake", "SWOT_data_version"]).size().rename("n_after").reset_index()
+    stats = before.merge(after, on=["lake", "SWOT_data_version"], how="outer").fillna(0)
     return g.reset_index(drop=True), stats
 
 
@@ -130,7 +130,7 @@ def filter_version(gage: pd.DataFrame, version: str | None) -> pd.DataFrame:
 
 
 def d_preferred_else_c(gage: pd.DataFrame) -> pd.DataFrame:
-    """Gabungan: D diutamakan, C bila D tidak ada (setelah dedup per kunci)."""
+    """Merge: prefer D, else C (after per-key dedup)."""
     g = gage.copy()
     g["t_sec"] = g["SWOT_time"].dt.floor("s")
     key = ["lake_id", "cycle_id", "pass_id", "t_sec"]
@@ -140,7 +140,7 @@ def d_preferred_else_c(gage: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_bias_and_ec(gage: pd.DataFrame, max_hours: float, main_mask: pd.Series | None = None) -> pd.DataFrame:
-    """Tambah e_obs, bias_danau, e_c. Bias dari himpunan utama bila mask diberikan."""
+    """Add e_obs, lake_bias, e_c. Bias from primary subset when mask is given."""
     g = gage.copy()
     dt_h = (g["gage_time_UTC"] - g["SWOT_time"]).abs().dt.total_seconds() / 3600.0
     g["dt_gage_h"] = dt_h
@@ -148,15 +148,15 @@ def compute_bias_and_ec(gage: pd.DataFrame, max_hours: float, main_mask: pd.Seri
     g["truth_ok"] = truth_ok
     g["e_obs"] = np.where(truth_ok, g["wse"] - g["gage_wse_EGM2008"], np.nan)
     biases = {}
-    for danau, sub in g.groupby("danau"):
+    for lake_name, sub in g.groupby("lake"):
         if main_mask is not None:
             m = main_mask.reindex(sub.index).fillna(False)
             e = sub.loc[m & sub["truth_ok"], "e_obs"]
         else:
             e = sub.loc[sub["truth_ok"], "e_obs"]
-        biases[danau] = float(np.nanmedian(e)) if len(e) and e.notna().any() else float("nan")
-    g["bias_danau"] = g["danau"].map(biases)
-    g["e_c"] = g["e_obs"] - g["bias_danau"]
+        biases[lake_name] = float(np.nanmedian(e)) if len(e) and e.notna().any() else float("nan")
+    g["lake_bias"] = g["lake"].map(biases)
+    g["e_c"] = g["e_obs"] - g["lake_bias"]
     g.attrs["biases"] = biases
     return g
 
@@ -170,14 +170,14 @@ def main_set_mask(g: pd.DataFrame, require_ice0: bool = True) -> pd.Series:
 
 def build_pair_table(
     gage: pd.DataFrame,
-    danau_a: str,
-    danau_b: str,
+    lake_a: str,
+    lake_b: str,
     max_dt_sec: float = 120.0,
     require_ice0: bool = True,
 ) -> pd.DataFrame:
-    """Pass bersama: cycle+pass sama, |Δt|≤120s; kolom kebenaran digabung nanti."""
-    a = gage[gage["danau"] == danau_a].copy()
-    b = gage[gage["danau"] == danau_b].copy()
+    """Same-pass: shared cycle+pass, |Δt|≤120s; truth columns joined later."""
+    a = gage[gage["lake"] == lake_a].copy()
+    b = gage[gage["lake"] == lake_b].copy()
     rows = []
     # index B by (cycle, pass)
     b["_key"] = b["cycle_id"].astype(str) + "|" + b["pass_id"].astype(str)
@@ -191,7 +191,7 @@ def build_pair_table(
         if dt.loc[j] > pd.Timedelta(seconds=max_dt_sec):
             continue
         rb = cand.loc[j]
-        # buang bila gage_id sama di kedua sisi
+        # drop if same gage_id on both sides
         if str(ra["gage_id"]) == str(rb["gage_id"]):
             continue
         q_a, q_b = ra["quality_f"], rb["quality_f"]
@@ -201,7 +201,7 @@ def build_pair_table(
         main = core and (ice_ok if require_ice0 else True)
         dWSE = float(ra["wse"]) - float(rb["wse"]) if np.isfinite(ra["wse"]) and np.isfinite(rb["wse"]) else np.nan
         H = 0.5 * (float(ra["wse"]) + float(rb["wse"])) if np.isfinite(ra["wse"]) and np.isfinite(rb["wse"]) else np.nan
-        # kebenaran
+        # truth
         ga, gb = ra["gage_wse_EGM2008"], rb["gage_wse_EGM2008"]
         ta_ok = bool(ra.get("truth_ok", False))
         tb_ok = bool(rb.get("truth_ok", False))
@@ -228,7 +228,7 @@ def build_pair_table(
                 "core": bool(core),
                 "ice_ok": bool(ice_ok),
                 "main": bool(main),
-                "sudah_ditandai_flag": bool(q_a in (2, 3) or q_b in (2, 3)),
+                "already_quality_flagged": bool(q_a in (2, 3) or q_b in (2, 3)),
                 "phase": "",
                 "gage_a": float(ga) if np.isfinite(ga) else np.nan,
                 "gage_b": float(gb) if np.isfinite(gb) else np.nan,
@@ -243,7 +243,7 @@ def build_pair_table(
     pairs = pd.DataFrame(rows)
     if pairs.empty:
         return pairs
-    # e_dwse_c = e_dwse − median(e_dwse) pada himpunan utama berkebenaran
+    # e_dwse_c = e_dwse − median(e_dwse) on the primary truth subset
     med = np.nanmedian(pairs.loc[pairs["main"] & pairs["both_truth"], "e_dwse"])
     pairs["e_dwse_c"] = pairs["e_dwse"] - med
     pairs["median_e_dwse"] = med
@@ -252,8 +252,8 @@ def build_pair_table(
 
 def label_truth(pairs: pd.DataFrame, T: float) -> pd.DataFrame:
     p = pairs.copy()
-    p["bermasalah"] = p["both_truth"] & np.isfinite(p["e_dwse_c"]) & (p["e_dwse_c"].abs() > T)
-    # danau bersalah
+    p["anomalous"] = p["both_truth"] & np.isfinite(p["e_dwse_c"]) & (p["e_dwse_c"].abs() > T)
+    # incorrect lake
     guilty = []
     for _, r in p.iterrows():
         if not (r["both_truth"] and np.isfinite(r["e_c_a"]) and np.isfinite(r["e_c_b"])):
@@ -263,7 +263,7 @@ def label_truth(pairs: pd.DataFrame, T: float) -> pd.DataFrame:
         if max(ea, eb) <= T:
             guilty.append("")
         elif ea > eb:
-            guilty.append("a")  # danau_a
+            guilty.append("a")  # lake_a
         elif eb > ea:
             guilty.append("b")
         else:
@@ -273,7 +273,7 @@ def label_truth(pairs: pd.DataFrame, T: float) -> pd.DataFrame:
 
 
 def to_swot_like(gage: pd.DataFrame) -> pd.DataFrame:
-    """Format mirip Hydrocron untuk run_d2_final / B-temp / triangulasi."""
+    """Hydrocron-like frame for run_d2_final / B-temp / triangulation."""
     s = gage.copy()
     s["time"] = s["SWOT_time"]
     s["pass"] = s["pass_id"].astype(str).str.replace(r"\.0$", "", regex=True).str.zfill(3)
@@ -286,14 +286,14 @@ def make_d2_cfg(
     det: dict,
     all_lakes_cfg: dict,
 ) -> dict:
-    """Cfg untuk satu pasangan + triangulasi terhadap danau_tri."""
+    """Config for one pair + triangulation vs lake_tri."""
     cfg = copy.deepcopy(base_d2)
-    a, b, tri = pair_spec["danau_a"], pair_spec["danau_b"], pair_spec["danau_tri"]
+    a, b, tri = pair_spec["lake_a"], pair_spec["lake_b"], pair_spec["lake_tri"]
     cfg["pair"] = {
         "name": pair_spec["name"],
-        "danau_a": a,
-        "danau_b": b,
-        "danau_tri": tri,
+        "lake_a": a,
+        "lake_b": b,
+        "lake_tri": tri,
     }
     cfg["detection_final"] = {
         "h_threshold_m": float(det["h_threshold_m"]),
@@ -306,14 +306,14 @@ def make_d2_cfg(
         "pairs": [
             {
                 "name": f"{a}_minus_{tri}",
-                "danau_a": a,
-                "danau_b": tri,
+                "lake_a": a,
+                "lake_b": tri,
                 "points_to": a,
             },
             {
                 "name": f"{b}_minus_{tri}",
-                "danau_a": b,
-                "danau_b": tri,
+                "lake_a": b,
+                "lake_b": tri,
                 "points_to": b,
             },
         ],
@@ -321,35 +321,35 @@ def make_d2_cfg(
     return cfg
 
 
-def map_sumber_to_side(sumber: str, danau_a: str, danau_b: str) -> str:
-    s = str(sumber).strip().lower()
-    if s == danau_a.lower():
+def map_sumber_to_side(source: str, lake_a: str, lake_b: str) -> str:
+    s = str(source).strip().lower()
+    if s == lake_a.lower():
         return "a"
-    if s == danau_b.lower():
+    if s == lake_b.lower():
         return "b"
-    return s  # ambigu / tak bisa...
+    return s  # ambiguous / cannot map
 
 
 def method_flags_on_pairs(
     pairs: pd.DataFrame,
     d2_flags: pd.Series | None,
     btemp_flag_times: dict[str, set] | None,
-    danau_a: str,
-    danau_b: str,
-    ketat: dict,
+    lake_a: str,
+    lake_b: str,
+    strict_cfg: dict,
 ) -> dict[str, pd.Series]:
-    """Boolean series indexed like pairs for methods (i)–(iv). True = ditandai/dibuang."""
+    """Boolean series indexed like pairs for methods (i)–(iv). True = flagged/dropped."""
     n = len(pairs)
-    # (i) q01: "dibuang" = tidak lolos q01 → ~core
+    # (i) q01: "dropped" = fails q01 → ~core
     m_q01_drop = ~pairs["core"].astype(bool)
-    # (ii) ketat
+    # (ii) strict
     ketat_ok = (
-        (pairs["q_a"] == ketat["quality_f"])
-        & (pairs["q_b"] == ketat["quality_f"])
-        & (pairs["partial_a"] == ketat["partial_f"])
-        & (pairs["partial_b"] == ketat["partial_f"])
-        & (pairs["dark_a"] < ketat["dark_frac_max"])
-        & (pairs["dark_b"] < ketat["dark_frac_max"])
+        (pairs["q_a"] == strict_cfg["quality_f"])
+        & (pairs["q_b"] == strict_cfg["quality_f"])
+        & (pairs["partial_a"] == strict_cfg["partial_f"])
+        & (pairs["partial_b"] == strict_cfg["partial_f"])
+        & (pairs["dark_a"] < strict_cfg["dark_frac_max"])
+        & (pairs["dark_b"] < strict_cfg["dark_frac_max"])
     )
     m_ketat_drop = ~ketat_ok
     # (iii) B-temp
@@ -358,8 +358,8 @@ def method_flags_on_pairs(
         for i, t in enumerate(pairs["time"]):
             t = pd.Timestamp(t)
             hit = False
-            for danau in (danau_a, danau_b):
-                for ft in btemp_flag_times.get(danau, set()):
+            for lake_name in (lake_a, lake_b):
+                for ft in btemp_flag_times.get(lake_name, set()):
                     if abs((ft - t).total_seconds()) <= 120:
                         hit = True
                         break
@@ -374,7 +374,7 @@ def method_flags_on_pairs(
         m_d2 = d2_flags.reindex(pairs.index).fillna(False).astype(bool)
     return {
         "q01": m_q01_drop,
-        "ketat": m_ketat_drop,
+        "strict": m_ketat_drop,
         "Btemp": m_bt,
         "D2": m_d2,
     }
@@ -388,30 +388,30 @@ def metrics_block(
     pair_name: str,
     require_main: bool = True,
 ) -> list[dict]:
-    """Hitung metrik deteksi untuk pass berkebenaran (opsional himpunan utama)."""
+    """Compute detection metrics for truth-labeled passes (optional primary subset)."""
     p = label_truth(pairs, T)
     if require_main:
         base = p[p["main"] & p["both_truth"]].copy()
     else:
         base = p[p["both_truth"]].copy()
     n_truth = len(base)
-    n_bad = int(base["bermasalah"].sum())
+    n_bad = int(base["anomalous"].sum())
     rows = []
     for method, mask_all in method_masks.items():
         mask = mask_all.reindex(base.index).fillna(False).astype(bool)
         # flagged/dropped among truth-labeled
         flagged = mask
-        tp = int((flagged & base["bermasalah"]).sum())
-        fp = int((flagged & ~base["bermasalah"]).sum())
-        fn = int((~flagged & base["bermasalah"]).sum())
-        tn = int((~flagged & ~base["bermasalah"]).sum())
+        tp = int((flagged & base["anomalous"]).sum())
+        fp = int((flagged & ~base["anomalous"]).sum())
+        fn = int((~flagged & base["anomalous"]).sum())
+        tn = int((~flagged & ~base["anomalous"]).sum())
         n_flag = int(flagged.sum())
         # precision/recall/FPR
         prec, prec_lo, prec_hi = wilson_ci(tp, tp + fp)
         rec, rec_lo, rec_hi = wilson_ci(tp, tp + fn)  # among bad
         # FPR = flagged among not-bad
         fpr, fpr_lo, fpr_hi = wilson_ci(fp, fp + tn)
-        # fraksi data dipertahankan: di himpunan evaluasi, 1 - n_flag/n
+        # fraksi data retained: di subset evaluasi, 1 - n_flag/n
         retained = 1.0 - (n_flag / n_truth) if n_truth else float("nan")
         rows.append(
             {
@@ -444,67 +444,67 @@ def metrics_block(
 
 def attribution_rows(
     merged: pd.DataFrame,
-    danau_a: str,
-    danau_b: str,
+    lake_a: str,
+    lake_b: str,
     T: float,
     pair_name: str,
     k_label: float,
-    himpunan: str = "utama_ice0_q01",
+    subset: str = "primary_ice0_q01",
 ) -> list[dict]:
-    """Proporsi atribusi benar/salah/ambigu di antara D2 flag & bermasalah & punya guilty."""
+    """Attribution correct/incorrect/ambiguous share among D2-flagged & anomalous with guilty."""
     m = merged[
         merged["flag"].astype(bool)
-        & merged["bermasalah"].astype(bool)
+        & merged["anomalous"].astype(bool)
         & merged["guilty_side"].isin(["a", "b"])
     ].copy()
     rows = []
-    for cara in ("triangulasi", "temporal", "ambigu", "all"):
+    for cara in ("triangulation", "temporal", "ambiguous", "all"):
         if cara == "all":
             sub = m
         else:
-            sub = m[m["cara_atribusi"] == cara] if cara != "ambigu" else m[m["cara_atribusi"].isin(["ambigu", ""])]
-            if cara == "ambigu":
-                sub = m[~m["cara_atribusi"].isin(["triangulasi", "temporal"])]
+            sub = m[m["attribution_method"] == cara] if cara != "ambiguous" else m[m["attribution_method"].isin(["ambiguous", ""])]
+            if cara == "ambiguous":
+                sub = m[~m["attribution_method"].isin(["triangulation", "temporal"])]
         n = len(sub)
         if n == 0:
             rows.append(
                 {
                     "pair": pair_name,
-                    "himpunan": himpunan,
+                    "subset": subset,
                     "k": k_label,
                     "T": T,
                     "cara": cara,
                     "n": 0,
-                    "benar": 0,
-                    "salah": 0,
-                    "ambigu_attr": 0,
-                    "frac_benar": float("nan"),
+                    "correct": 0,
+                    "incorrect": 0,
+                    "ambiguous_attr": 0,
+                    "frac_correct": float("nan"),
                 }
             )
             continue
-        benar = salah = amb = 0
+        correct = incorrect = amb = 0
         for _, r in sub.iterrows():
-            side = map_sumber_to_side(r.get("sumber_akhir", ""), danau_a, danau_b)
+            side = map_sumber_to_side(r.get("final_source", ""), lake_a, lake_b)
             if side not in ("a", "b"):
                 amb += 1
             elif side == r["guilty_side"]:
-                benar += 1
+                correct += 1
             else:
-                salah += 1
+                incorrect += 1
         rows.append(
             {
                 "pair": pair_name,
-                "himpunan": himpunan,
+                "subset": subset,
                 "k": k_label,
                 "T": T,
                 "cara": cara,
                 "n": n,
-                "benar": benar,
-                "salah": salah,
-                "ambigu_attr": amb,
-                "frac_benar": benar / n,
-                "frac_salah": salah / n,
-                "frac_ambigu": amb / n,
+                "correct": correct,
+                "incorrect": incorrect,
+                "ambiguous_attr": amb,
+                "frac_correct": correct / n,
+                "frac_incorrect": incorrect / n,
+                "frac_ambiguous": amb / n,
             }
         )
     return rows
@@ -515,21 +515,21 @@ def rmse_mad_by_lake_variants(
     d2_merged_by_pair: dict[str, pd.DataFrame],
     pair_specs: dict,
     btemp: pd.DataFrame,
-    ketat: dict,
+    strict_cfg: dict,
 ) -> pd.DataFrame:
-    """V1 q01, V2 ketat, V3 q01+D2 attr, V4 q01+Btemp — RMSE/MAD e_c per danau."""
+    """V1 q01, V2 strict, V3 q01+D2 attr, V4 q01+Btemp — RMSE/MAD e_c per lake."""
     g = gage.copy()
     g["time"] = pd.to_datetime(g["SWOT_time"], utc=True)
     # collect D2 flagged drops per lake
-    drop_v3: dict[str, set] = {d: set() for d in g["danau"].unique()}
+    drop_v3: dict[str, set] = {d: set() for d in g["lake"].unique()}
     for pname, spec in pair_specs.items():
         m = d2_merged_by_pair.get(pname)
         if m is None or m.empty:
             continue
-        a, b = spec["danau_a"], spec["danau_b"]
+        a, b = spec["lake_a"], spec["lake_b"]
         for _, r in m[m["flag"].astype(bool)].iterrows():
             t = pd.Timestamp(r["time"])
-            src = str(r.get("sumber_akhir", ""))
+            src = str(r.get("final_source", ""))
             side = map_sumber_to_side(src, a, b)
             if side == "a":
                 drop_v3[a].add(t)
@@ -545,11 +545,11 @@ def rmse_mad_by_lake_variants(
     if btemp is not None and len(btemp) and fcol in btemp.columns:
         bt = btemp.copy()
         bt["time"] = pd.to_datetime(bt["time"], utc=True)
-        for danau, sub in bt.groupby("danau"):
-            bt_times[danau] = set(pd.Timestamp(t) for t in sub.loc[sub[fcol].astype(bool), "time"])
+        for lake_name, sub in bt.groupby("lake"):
+            bt_times[lake_name] = set(pd.Timestamp(t) for t in sub.loc[sub[fcol].astype(bool), "time"])
 
     rows = []
-    for danau, sub0 in g.groupby("danau"):
+    for lake_name, sub0 in g.groupby("lake"):
         sub = sub0.copy()
         # only truth_ok for RMSE of e_c
         for variant, keep_fn in (
@@ -558,23 +558,23 @@ def rmse_mad_by_lake_variants(
                 lambda s: s["quality_f"].isin([0, 1]),
             ),
             (
-                "V2_ketat",
+                "V2_strict",
                 lambda s: (
-                    (s["quality_f"] == ketat["quality_f"])
-                    & (s["partial_f"] == ketat["partial_f"])
-                    & (s["dark_frac"] < ketat["dark_frac_max"])
+                    (s["quality_f"] == strict_cfg["quality_f"])
+                    & (s["partial_f"] == strict_cfg["partial_f"])
+                    & (s["dark_frac"] < strict_cfg["dark_frac_max"])
                 ),
             ),
             (
                 "V3_q01_D2attr",
-                lambda s, d=danau: s["quality_f"].isin([0, 1])
+                lambda s, d=lake_name: s["quality_f"].isin([0, 1])
                 & ~s["time"].map(
                     lambda t: any(abs((t - ft).total_seconds()) <= 120 for ft in drop_v3.get(d, set()))
                 ),
             ),
             (
                 "V4_q01_Btemp",
-                lambda s, d=danau: s["quality_f"].isin([0, 1])
+                lambda s, d=lake_name: s["quality_f"].isin([0, 1])
                 & ~s["time"].map(
                     lambda t: any(abs((t - ft).total_seconds()) <= 120 for ft in bt_times.get(d, set()))
                 ),
@@ -584,8 +584,7 @@ def rmse_mad_by_lake_variants(
             e = sub.loc[m, "e_c"].to_numpy(dtype=float)
             rows.append(
                 {
-                    "danau": danau,
-                    "variant": variant,
+                    "lake": lake_name, "variant": variant,
                     "n": int(m.sum()),
                     "rmse_e_c": float(np.sqrt(np.mean(e**2))) if e.size else "",
                     "mad_e_c": mad(e) if e.size else "",

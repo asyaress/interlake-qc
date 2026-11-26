@@ -25,7 +25,7 @@ def test_dedup_prefer_d():
                 "pass_id": "100",
                 "SWOT_time": pd.Timestamp("2024-01-01T12:00:00Z"),
                 "SWOT_data_version": ver,
-                "danau": "test",
+                "lake": "test",
                 "wse": wse,
             }
         )

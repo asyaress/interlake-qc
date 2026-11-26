@@ -28,7 +28,8 @@ def main() -> int:
     out = REPO / cfg["paths"]["out_dir"]
     out.mkdir(parents=True, exist_ok=True)
 
-    swot = pd.read_csv(REPO / cfg["paths"]["r2_swot_with_pass"])
+    from interlake_qc.schema import normalize_swot_frame
+    swot = normalize_swot_frame(pd.read_csv(REPO / cfg["paths"]["r2_swot_with_pass"]))
     swot["time"] = pd.to_datetime(swot["time"], utc=True, errors="coerce")
     phase_path = REPO / "data/processed/mahakam_dwse_phase.csv"
     phase_df = pd.read_csv(phase_path) if phase_path.exists() else None

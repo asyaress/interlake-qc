@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from interlake_qc.core import load_d2_config, prepare_pair_table
+from interlake_qc.schema import normalize_swot_frame
 from interlake_qc.validation_yahara import (
     build_pair_table,
     compute_bias_and_ec,
@@ -23,7 +24,7 @@ TOL = 1e-9
 
 def test_mahakam_pairing_from_swot():
     cfg = load_d2_config(REPO, "configs/mahakam.yaml")
-    swot = pd.read_csv(REPO / "data/processed/mahakam_swot_lakesp.csv")
+    swot = normalize_swot_frame(pd.read_csv(REPO / "data/processed/mahakam_swot_lakesp.csv"))
     swot["time"] = pd.to_datetime(swot["time"], utc=True, errors="coerce")
     phase = pd.read_csv(REPO / "data/processed/mahakam_dwse_phase.csv")
     built = prepare_pair_table(swot, cfg, phase_df=phase).sort_values("time").reset_index(drop=True)
@@ -52,6 +53,6 @@ def test_yahara_pairing_builds_from_subset():
     gage = d_preferred_else_c(gage)
     gage = compute_bias_and_ec(gage, float(r7["truth"]["max_gage_dt_hours"]), main_mask=main_set_mask(gage, True))
     spec = r7["amendment_1"]["pairs"]["P2"]
-    pairs = build_pair_table(gage, spec["danau_a"], spec["danau_b"], 120.0, require_ice0=True)
+    pairs = build_pair_table(gage, spec["lake_a"], spec["lake_b"], 120.0, require_ice0=True)
     assert len(pairs) >= 64
     assert int((pairs["main"] & pairs["both_truth"]).sum()) == 64

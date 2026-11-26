@@ -1,4 +1,4 @@
-"""Utilitas bersama R4b."""
+"""Shared helpers for synthetic / R4b utilities."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ def truth_curve_table(cfg: dict) -> pd.DataFrame:
 
 
 def interp_truth(h: float | np.ndarray, bins: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-    """Interpolasi linear g(H)=f dan σ(H) dari truth_curve."""
+    """Linear interpolation of g(H)=f and σ(H) from truth_curve."""
     centers = bins["center"].to_numpy(dtype=float)
     fvals = bins["f"].to_numpy(dtype=float)
     svals = bins["sigma"].to_numpy(dtype=float)
@@ -47,13 +47,13 @@ def flag_col(df: pd.DataFrame, k: float) -> str:
     return name
 
 
-def d2_cfg_from_d2b(cfg: dict, danau_a: str | None = None, danau_b: str | None = None) -> dict:
-    """Bangun dict kompatibel run_d2 / prepare_pair_table."""
+def d2_cfg_from_d2b(cfg: dict, lake_a: str | None = None, lake_b: str | None = None) -> dict:
+    """Build a dict compatible with run_d2 / prepare_pair_table."""
     return {
         "pair": {
-            "danau_a": danau_a or cfg["pair"]["danau_a"],
-            "danau_b": danau_b or cfg["pair"]["danau_b"],
-            "name": f"{danau_a or cfg['pair']['danau_a']}_minus_{danau_b or cfg['pair']['danau_b']}",
+            "lake_a": lake_a or cfg["pair"]["lake_a"],
+            "lake_b": lake_b or cfg["pair"]["lake_b"],
+            "name": f"{lake_a or cfg['pair']['lake_a']}_minus_{lake_b or cfg['pair']['lake_b']}",
         },
         "quality": cfg["quality"],
         "reference_curve": cfg["reference_curve"],
@@ -63,6 +63,6 @@ def d2_cfg_from_d2b(cfg: dict, danau_a: str | None = None, danau_b: str | None =
     }
 
 
-def is_named_source(sumber: str) -> bool:
-    s = str(sumber).strip().lower()
-    return s not in ("", "ambigu", "tak bisa diatribusi", "nan", "none")
+def is_named_source(source: str) -> bool:
+    s = str(source).strip().lower()
+    return s not in ("", "ambiguous", "unattributed", "nan", "none")

@@ -1,4 +1,4 @@
-"""R7b — validasi D2 Yahara (mendukung amendment_1: P2 utama)."""
+"""R7b — Yahara D2 validation (amendment_1: P2 primary)."""
 
 from __future__ import annotations
 
@@ -49,12 +49,12 @@ def active_pairs(r7: dict) -> dict:
 def plot_dwse(res: pd.DataFrame, bins: pd.DataFrame, cfg_det: dict, pair_name: str, out: Path, T: float) -> None:
     fig, ax = plt.subplots(figsize=(9, 5.5))
     p = res.copy()
-    if "bermasalah" not in p.columns:
-        p["bermasalah"] = False
-    ok = p[~p["bermasalah"].astype(bool)]
-    bad = p[p["bermasalah"].astype(bool)]
-    ax.scatter(ok["H"], ok["dWSE"], c="#4C78A8", s=28, alpha=0.8, label="tidak bermasalah")
-    ax.scatter(bad["H"], bad["dWSE"], c="#E45756", s=36, alpha=0.9, label="bermasalah")
+    if "anomalous" not in p.columns:
+        p["anomalous"] = False
+    ok = p[~p["anomalous"].astype(bool)]
+    bad = p[p["anomalous"].astype(bool)]
+    ax.scatter(ok["H"], ok["dWSE"], c="#4C78A8", s=28, alpha=0.8, label="not anomalous")
+    ax.scatter(bad["H"], bad["dWSE"], c="#E45756", s=36, alpha=0.9, label="anomalous")
     fl = p[p["flag"].astype(bool)]
     ax.scatter(fl["H"], fl["dWSE"], facecolors="none", edgecolors="k", s=80, linewidths=1.2, label="D2 flag")
     if len(bins):
@@ -79,25 +79,25 @@ def plot_dwse(res: pd.DataFrame, bins: pd.DataFrame, cfg_det: dict, pair_name: s
 
 
 def plot_e_timeseries(gage: pd.DataFrame, d2_drops: dict[str, set], out: Path, lakes: list[str] | None = None) -> None:
-    lakes = lakes or sorted(gage["danau"].dropna().unique())
+    lakes = lakes or sorted(gage["lake"].dropna().unique())
     fig, axes = plt.subplots(len(lakes), 1, figsize=(10, 2.4 * len(lakes)), sharex=True)
     if len(lakes) == 1:
         axes = [axes]
-    for ax, danau in zip(axes, lakes):
-        sub = gage[(gage["danau"] == danau) & gage["truth_ok"]].sort_values("SWOT_time")
+    for ax, lake_name in zip(axes, lakes):
+        sub = gage[(gage["lake"] == lake_name) & gage["truth_ok"]].sort_values("SWOT_time")
         ax.plot(sub["SWOT_time"], sub["e_c"], ".", color="#4C78A8", ms=4, label="e_c")
-        drops = d2_drops.get(danau, set())
+        drops = d2_drops.get(lake_name, set())
         if drops and len(sub):
             m = sub["SWOT_time"].map(
                 lambda t: any(abs((pd.Timestamp(t) - ft).total_seconds()) <= 120 for ft in drops)
             )
-            ax.plot(sub.loc[m, "SWOT_time"], sub.loc[m, "e_c"], "x", color="#E45756", ms=7, label="dibuang D2")
+            ax.plot(sub.loc[m, "SWOT_time"], sub.loc[m, "e_c"], "x", color="#E45756", ms=7, label="dropped by D2")
         ax.axhline(0, color="k", lw=0.6)
-        ax.set_ylabel(danau)
+        ax.set_ylabel(lake_name)
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=7, loc="upper right")
     axes[-1].set_xlabel("time")
-    fig.suptitle("e_c per danau (× = dibuang D2 attr)")
+    fig.suptitle("e_c by lake (x = dropped by D2 attr)")
     fig.tight_layout()
     fig.savefig(out / "r7b_e_timeseries.png", dpi=150)
     plt.close(fig)
@@ -109,7 +109,7 @@ def plot_z_vs_edwse(all_merged: pd.DataFrame, k: float, T: float, out: Path) -> 
     ax.scatter(
         p["e_dwse_c"].abs(),
         p["z"].abs(),
-        c=p["bermasalah"].map({True: "#E45756", False: "#4C78A8"}),
+        c=p["anomalous"].map({True: "#E45756", False: "#4C78A8"}),
         s=28,
         alpha=0.8,
     )
@@ -129,10 +129,10 @@ def run_one_d2(pairs, swot, base_d2, pair_spec, det, do_attr=True):
     from interlake_qc.core import run_d2_final
 
     cfg = make_d2_cfg(base_d2, pair_spec, det, {})
-    # temporal hanya A/B; danau_tri tetap tersedia via swot untuk triangulasi
+    # temporal uses A/B only; lake_tri remains available via swot for triangulation
     lakes = {
-        pair_spec["danau_a"]: swot[swot["danau"] == pair_spec["danau_a"]],
-        pair_spec["danau_b"]: swot[swot["danau"] == pair_spec["danau_b"]],
+        pair_spec["lake_a"]: swot[swot["lake"] == pair_spec["lake_a"]],
+        pair_spec["lake_b"]: swot[swot["lake"] == pair_spec["lake_b"]],
     }
     pairs_run = pairs.copy()
     pairs_run["core"] = pairs_run["main"].astype(bool)
@@ -141,13 +141,13 @@ def run_one_d2(pairs, swot, base_d2, pair_spec, det, do_attr=True):
     return res, bins, time.perf_counter() - t0
 
 
-def merge_d2_truth(res, pairs, T, danau_a, danau_b):
+def merge_d2_truth(res, pairs, T, lake_a, lake_b):
     p = label_truth(pairs, T)
     r = res.copy()
     r["time"] = pd.to_datetime(r["time"], utc=True)
     p["time"] = pd.to_datetime(p["time"], utc=True)
     cols = [
-        "e_c_a", "e_c_b", "e_dwse_c", "e_dwse", "both_truth", "bermasalah", "guilty_side",
+        "e_c_a", "e_c_b", "e_dwse_c", "e_dwse", "both_truth", "anomalous", "guilty_side",
         "gage_a", "gage_b", "dark_a", "dark_b", "ice_a", "ice_b", "q_a", "q_b", "main", "core",
     ]
     out_rows = []
@@ -161,10 +161,10 @@ def merge_d2_truth(res, pairs, T, danau_a, danau_b):
                 if c in p.columns:
                     row[c] = p.loc[j, c]
             gs = p.loc[j, "guilty_side"]
-            row["guilty_lake"] = danau_a if gs == "a" else (danau_b if gs == "b" else gs)
+            row["guilty_lake"] = lake_a if gs == "a" else (lake_b if gs == "b" else gs)
         else:
             for c in cols:
-                row[c] = np.nan if c not in ("both_truth", "bermasalah", "main", "core") else False
+                row[c] = np.nan if c not in ("both_truth", "anomalous", "main", "core") else False
             row["guilty_lake"] = ""
         out_rows.append(row)
     return pd.DataFrame(out_rows)
@@ -181,29 +181,29 @@ def align_flags(pairs, res):
     return flag_series
 
 
-def metrics_row_id(r: dict, peran: str, himpunan: str, versi: str) -> dict:
-    """Ubah keluaran metrics_block ke skema kolom amandemen."""
+def metrics_row_id(r: dict, role: str, subset: str, versi: str) -> dict:
+    """Convert metrics_block output to the amendment column schema."""
     return {
-        "pasangan": r["pair"],
-        "peran": peran,
+        "pair": r["pair"],
+        "role": role,
         "k": r["k"],
         "T": r["T"],
-        "himpunan": himpunan,
+        "subset": subset,
         "versi": versi,
-        "metode": r["method"],
+        "method": r["method"],
         "n_pass": r["n_truth"],
-        "n_bermasalah": r["n_bad"],
-        "n_ditandai": r["n_flagged"],
-        "presisi": r["precision"],
-        "presisi_lo": r["precision_lo"],
-        "presisi_hi": r["precision_hi"],
+        "n_anomalous": r["n_bad"],
+        "n_flagged": r["n_flagged"],
+        "precision": r["precision"],
+        "precision_lo": r["precision_lo"],
+        "precision_hi": r["precision_hi"],
         "recall": r["recall"],
         "recall_lo": r["recall_lo"],
         "recall_hi": r["recall_hi"],
         "fpr": r["fpr"],
         "fpr_lo": r["fpr_lo"],
         "fpr_hi": r["fpr_hi"],
-        "frac_dipertahankan": r["frac_retained"],
+        "frac_retained": r["frac_retained"],
         "prevalence": r.get("prevalence"),
         "tp": r["tp"],
         "fp": r["fp"],
@@ -213,8 +213,8 @@ def metrics_row_id(r: dict, peran: str, himpunan: str, versi: str) -> dict:
 
 
 def tri_coverage(pairs_main: pd.DataFrame, gage: pd.DataFrame, tri_lake: str, max_dt: float = 120.0) -> dict:
-    """Berapa pass utama P2 yang juga punya danau tri pada cycle+pass sama, q01, ≤120s."""
-    g = gage[gage["danau"] == tri_lake].copy()
+    """How many primary P2 passes also have a tri lake on same cycle+pass, q01, ≤120s."""
+    g = gage[gage["lake"] == tri_lake].copy()
     g["_key"] = g["cycle_id"].astype(str) + "|" + g["pass_id"].astype(str)
     n_main = int(pairs_main["main"].sum()) if len(pairs_main) else 0
     n_hit = 0
@@ -262,12 +262,12 @@ def main() -> int:
     primary_id = a1.get("primary_pair", "P2")
     stop_id = a1.get("stop_pair", primary_id)
     min_stop = int(a1.get("min_primary_main_with_truth", r7.get("min_p1_main_with_truth", 40)))
-    print(f"amendment_1 active={bool(a1)} primary={primary_id} tri_P2={pairs_cfg[primary_id]['danau_tri']}", flush=True)
+    print(f"amendment_1 active={bool(a1)} primary={primary_id} tri_P2={pairs_cfg[primary_id]['lake_tri']}", flush=True)
 
-    print("=== MUAT ===", flush=True)
+    print("=== LOAD ===", flush=True)
     gage0, sites, counts_pre = load_yahara_raw(REPO, r7)
     gage_dedup, dedup_stats = dedup_prefer_D(gage0)
-    # kebijakan versi cadangan (sudah aktif dari R7b)
+    # fallback version policy (already active since R7b)
     gage_fb = d_preferred_else_c(gage_dedup)
     main_m = main_set_mask(gage_fb, require_ice0=True)
     gage_use = compute_bias_and_ec(gage_fb, float(r7["truth"]["max_gage_dt_hours"]), main_mask=main_m)
@@ -289,27 +289,27 @@ def main() -> int:
     T_list = [T_main] + [float(x) for x in r7["truth"]["T_sens"]]
     det_main = r7["detection_main"]
     det_k4 = r7["detection_sens_k4"]
-    ketat = r7["ketat"]
+    strict_cfg= r7["strict"]
 
     # pair tables
     pair_tables = {}
     for pid, spec in pairs_cfg.items():
         pair_tables[pid] = build_pair_table(
-            gage_use, spec["danau_a"], spec["danau_b"], max_dt, require_ice0=True
+            gage_use, spec["lake_a"], spec["lake_b"], max_dt, require_ice0=True
         )
 
     # P2 checks + tri coverage + D-only counts
     p2 = pair_tables[primary_id]
     p2_spec = pairs_cfg[primary_id]
-    print("=== CEK P2 ===", flush=True)
+    print("=== CHECK P2 ===", flush=True)
     n_all, n_q01 = len(p2), int(p2["core"].sum()) if len(p2) else 0
     n_main = int(p2["main"].sum()) if len(p2) else 0
     n_truth = int((p2["main"] & p2["both_truth"]).sum()) if len(p2) else 0
     print(f"P2 all={n_all} q01={n_q01} main={n_main} main+truth={n_truth}", flush=True)
-    cov = tri_coverage(p2, gage_use, p2_spec["danau_tri"], max_dt)
-    print(f"tri coverage ({p2_spec['danau_tri']}): {cov}", flush=True)
+    cov = tri_coverage(p2, gage_use, p2_spec["lake_tri"], max_dt)
+    print(f"tri coverage ({p2_spec['lake_tri']}): {cov}", flush=True)
 
-    p2_D = build_pair_table(gage_D, p2_spec["danau_a"], p2_spec["danau_b"], max_dt, require_ice0=True)
+    p2_D = build_pair_table(gage_D, p2_spec["lake_a"], p2_spec["lake_b"], max_dt, require_ice0=True)
     n_truth_D = int((p2_D["main"] & p2_D["both_truth"]).sum()) if len(p2_D) else 0
     print(
         f"P2 D-only: all={len(p2_D)} q01={int(p2_D['core'].sum())} main={int(p2_D['main'].sum())} "
@@ -323,7 +323,7 @@ def main() -> int:
             {
                 "pair": pid,
                 "name": pairs_cfg[pid]["name"],
-                "peran": pairs_cfg[pid].get("peran", ""),
+                "role": pairs_cfg[pid].get("role", ""),
                 "n_all": len(pt),
                 "n_q01": int(pt["core"].sum()) if len(pt) else 0,
                 "n_main": int(pt["main"].sum()) if len(pt) else 0,
@@ -352,8 +352,8 @@ def main() -> int:
     if len(btemp) and "flag_k3.5" in btemp.columns:
         bt = btemp.copy()
         bt["time"] = pd.to_datetime(bt["time"], utc=True)
-        for danau, sub in bt.groupby("danau"):
-            bt_times[danau] = set(
+        for lake_name, sub in bt.groupby("lake"):
+            bt_times[lake_name] = set(
                 pd.Timestamp(t) for t in sub.loc[sub["flag_k3.5"].astype(bool), "time"]
             )
 
@@ -370,8 +370,8 @@ def main() -> int:
         pairs: pd.DataFrame,
         sw: pd.DataFrame,
         det: dict,
-        peran: str,
-        himpunan: str,
+        role: str,
+        subset: str,
         versi: str,
         do_attr: bool,
         save_main_outputs: bool,
@@ -384,37 +384,37 @@ def main() -> int:
         d2_time_total += elapsed
         if save_main_outputs:
             bins.to_csv(out / f"r7b_bins_{spec['name']}.csv", index=False)
-            res_m = merge_d2_truth(res, pairs, T_main, spec["danau_a"], spec["danau_b"])
+            res_m = merge_d2_truth(res, pairs, T_main, spec["lake_a"], spec["lake_b"])
             res_m.to_csv(out / f"r7b_d2_{spec['name']}.csv", index=False)
             d2_merged_store[pid] = res_m
             plot_dwse(res_m[res_m["main"] | res_m["flag"]], bins, det, spec["name"], out, T_main)
         else:
-            res_m = merge_d2_truth(res, pairs, T_main, spec["danau_a"], spec["danau_b"])
-            tag = f"{spec['name']}_{peran}_k{k_label}".replace(".", "")
+            res_m = merge_d2_truth(res, pairs, T_main, spec["lake_a"], spec["lake_b"])
+            tag = f"{spec['name']}_{role}_k{k_label}".replace(".", "")
             res_m.to_csv(out / f"r7b_d2_{tag}.csv", index=False)
 
         flag_series = align_flags(pairs, res)
-        masks = method_flags_on_pairs(pairs, flag_series, bt_times, spec["danau_a"], spec["danau_b"], ketat)
+        masks = method_flags_on_pairs(pairs, flag_series, bt_times, spec["lake_a"], spec["lake_b"], strict_cfg)
         for T in T_values:
             for raw in metrics_block(pairs, masks, T, k_label, spec["name"], require_main=True):
-                metric_rows.append(metrics_row_id(raw, peran, himpunan, versi))
-            merged_T = merge_d2_truth(res, pairs, T, spec["danau_a"], spec["danau_b"])
+                metric_rows.append(metrics_row_id(raw, role, subset, versi))
+            merged_T = merge_d2_truth(res, pairs, T, spec["lake_a"], spec["lake_b"])
             attr_rows.extend(
-                attribution_rows(merged_T, spec["danau_a"], spec["danau_b"], T, spec["name"], k_label, himpunan=himpunan)
+                attribution_rows(merged_T, spec["lake_a"], spec["lake_b"], T, spec["name"], k_label, subset=subset)
             )
 
-        if save_main_outputs and peran == "utama":
+        if save_main_outputs and role== "primary":
             for _, r in res_m[res_m["flag"].astype(bool)].iterrows():
                 flagged_rows.append(
                     {
-                        "tanggal": pd.Timestamp(r["time"]).strftime("%Y-%m-%d"),
+                        "date": pd.Timestamp(r["time"]).strftime("%Y-%m-%d"),
                         "pair": spec["name"],
                         "H": r.get("H"),
                         "dWSE": r.get("dWSE"),
                         "z": r.get("z"),
-                        "k": r.get("k_dipakai"),
-                        "sumber_akhir": r.get("sumber_akhir"),
-                        "cara_atribusi": r.get("cara_atribusi"),
+                        "k": r.get("k_used"),
+                        "final_source": r.get("final_source"),
+                        "attribution_method": r.get("attribution_method"),
                         "e_c_a": r.get("e_c_a"),
                         "e_c_b": r.get("e_c_b"),
                         "e_dwse_c": r.get("e_dwse_c"),
@@ -424,24 +424,24 @@ def main() -> int:
                         "dark_b": r.get("dark_b"),
                         "ice_a": r.get("ice_a"),
                         "ice_b": r.get("ice_b"),
-                        "bermasalah": r.get("bermasalah"),
+                        "anomalous": r.get("anomalous"),
                         "guilty_lake": r.get("guilty_lake"),
                     }
                 )
                 t = pd.Timestamp(r["time"])
-                side = map_sumber_to_side(str(r.get("sumber_akhir", "")), spec["danau_a"], spec["danau_b"])
+                side = map_sumber_to_side(str(r.get("final_source", "")), spec["lake_a"], spec["lake_b"])
                 if side == "a":
-                    d2_drops[spec["danau_a"]].add(t)
+                    d2_drops[spec["lake_a"]].add(t)
                 elif side == "b":
-                    d2_drops[spec["danau_b"]].add(t)
+                    d2_drops[spec["lake_b"]].add(t)
                 else:
-                    d2_drops[spec["danau_a"]].add(t)
-                    d2_drops[spec["danau_b"]].add(t)
+                    d2_drops[spec["lake_a"]].add(t)
+                    d2_drops[spec["lake_b"]].add(t)
 
             m15 = label_truth(pairs, T_main)
             mt = pd.to_datetime(res["time"], utc=True)
             for i, r in m15.iterrows():
-                if not (r["main"] and r["both_truth"] and r["bermasalah"]):
+                if not (r["main"] and r["both_truth"] and r["anomalous"]):
                     continue
                 if bool(flag_series.loc[i]):
                     continue
@@ -451,7 +451,7 @@ def main() -> int:
                 z = res.loc[j, "z"] if dt.loc[j] <= pd.Timedelta(seconds=120) else np.nan
                 missed_rows.append(
                     {
-                        "tanggal": t.strftime("%Y-%m-%d"),
+                        "date": t.strftime("%Y-%m-%d"),
                         "pair": spec["name"],
                         "H": r["H"],
                         "dWSE": r["dWSE"],
@@ -469,11 +469,11 @@ def main() -> int:
                 )
         return res, bins
 
-    # (a) UTAMA P2
-    print("=== D2 UTAMA P2 k=3.5 ===", flush=True)
+    # (a) PRIMARY P2
+    print("=== D2 PRIMARY P2 k=3.5 ===", flush=True)
     process_pair(
         primary_id, pair_tables[primary_id], swot, det_main,
-        peran="utama", himpunan="utama_ice0_q01", versi=versi_label,
+        role="primary", subset="primary_ice0_q01", versi=versi_label,
         do_attr=True, save_main_outputs=True, k_label=3.5, T_values=T_list,
     )
 
@@ -490,51 +490,51 @@ def main() -> int:
         "n": len(base),
     }
     pd.DataFrame([desc]).to_csv(out / "r7b_descriptive_P2.csv", index=False)
-    print("deskriptif P2:", desc, flush=True)
+    print("descriptive P2:", desc, flush=True)
 
-    # (b) sensitivitas P2
-    print("=== sensitivitas P2 k=4.0 ===", flush=True)
+    # (b) sensitivity P2
+    print("=== sensitivity P2 k=4.0 ===", flush=True)
     process_pair(
         primary_id, pair_tables[primary_id], swot, det_k4,
-        peran="sensitivitas", himpunan="utama_ice0_q01", versi=versi_label,
+        role="sensitivity", subset="primary_ice0_q01", versi=versi_label,
         do_attr=True, save_main_outputs=False, k_label=4.0, T_values=T_list,
     )
 
-    print("=== sensitivitas P2 tanpa syarat es ===", flush=True)
+    print("=== sensitivity P2 without ice requirement ===", flush=True)
     p2_ni = build_pair_table(
-        gage_noice, p2_spec["danau_a"], p2_spec["danau_b"], max_dt, require_ice0=False
+        gage_noice, p2_spec["lake_a"], p2_spec["lake_b"], max_dt, require_ice0=False
     )
     p2_ni["main"] = p2_ni["core"]
     process_pair(
         primary_id, p2_ni, swot_noice, det_main,
-        peran="sensitivitas", himpunan="q01_noice", versi=versi_label,
+        role="sensitivity", subset="q01_noice", versi=versi_label,
         do_attr=False, save_main_outputs=False, k_label=3.5, T_values=T_list,
     )
 
-    print("=== sensitivitas P2 versi D saja ===", flush=True)
+    print("=== sensitivity P2 version D only ===", flush=True)
     process_pair(
         primary_id, p2_D, swot_D, det_main,
-        peran="sensitivitas", himpunan="utama_ice0_q01", versi="D_only",
+        role="sensitivity", subset="primary_ice0_q01", versi="D_only",
         do_attr=True, save_main_outputs=False, k_label=3.5, T_values=T_list,
     )
 
-    # (c) objek kecil P1 & P3
+    # (c) small-object P1 & P3
     for pid in ("P1", "P3"):
-        print(f"=== objek_kecil {pid} ===", flush=True)
+        print(f"=== small_object {pid} ===", flush=True)
         process_pair(
             pid, pair_tables[pid], swot, det_main,
-            peran="objek_kecil", himpunan="utama_ice0_q01", versi=versi_label,
+            role="small_object", subset="primary_ice0_q01", versi=versi_label,
             do_attr=True, save_main_outputs=True, k_label=3.5, T_values=[T_main],
         )
         process_pair(
             pid, pair_tables[pid], swot, det_k4,
-            peran="objek_kecil", himpunan="utama_ice0_q01", versi=versi_label,
+            role="small_object", subset="primary_ice0_q01", versi=versi_label,
             do_attr=True, save_main_outputs=False, k_label=4.0, T_values=[T_main],
         )
 
-    # RMSE V1–V4 — fokus waubesa/kegonsa (+ semua danau untuk kelengkapan)
+    # RMSE V1–V4 — focus waubesa/kegonsa (+ all lakes for completeness)
     # Only use primary P2 merged for V3 drops on waubesa/kegonsa; still include P1/P3 store
-    rmse = rmse_mad_by_lake_variants(gage_use, d2_merged_store, pairs_cfg, btemp, ketat)
+    rmse = rmse_mad_by_lake_variants(gage_use, d2_merged_store, pairs_cfg, btemp, strict_cfg)
     rmse.to_csv(out / "r7b_rmse_by_lake.csv", index=False)
 
     pd.DataFrame(metric_rows).to_csv(out / "r7b_metrics.csv", index=False)
@@ -557,7 +557,7 @@ def main() -> int:
     ).to_csv(out / "r7b_run_meta.csv", index=False)
 
     print(f"D2 total time {d2_time_total:.2f}s", flush=True)
-    print("R7b-A1 selesai.", flush=True)
+    print("R7b-A1 done.", flush=True)
     return 0
 
 

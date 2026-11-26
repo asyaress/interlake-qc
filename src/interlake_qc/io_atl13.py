@@ -28,10 +28,10 @@ def atl13_daily_qc(seg: pd.DataFrame, cfg: dict, factor: float) -> tuple[pd.Data
     max_std = float(cfg["atl13"]["max_std_m"])
     stats: dict[str, Any] = {}
     rows = []
-    for danau, gdanau in seg.groupby("danau"):
-        n_before = gdanau["tanggal"].nunique()
+    for lake_name, gdanau in seg.groupby("lake"):
+        n_before = gdanau["date"].nunique()
         kept_dates = 0
-        for tanggal, g in gdanau.groupby("tanggal"):
+        for date, g in gdanau.groupby("date"):
             h = g["ht_ortho"].to_numpy(dtype=float)
             mask = nmad_filter(h, factor)
             h2 = h[mask]
@@ -43,15 +43,14 @@ def atl13_daily_qc(seg: pd.DataFrame, cfg: dict, factor: float) -> tuple[pd.Data
             kept_dates += 1
             rows.append(
                 {
-                    "danau": danau,
-                    "tanggal": tanggal,
+                    "lake": lake_name, "date": date,
                     "n_seg": int(h2.size),
                     "mean": float(np.mean(h2)),
                     "std": std,
                     "n_seg_before_nmad": int(h.size),
                 }
             )
-        stats[danau] = {"n_dates_before": int(n_before), "n_dates_after": int(kept_dates)}
+        stats[lake_name] = {"n_dates_before": int(n_before), "n_dates_after": int(kept_dates)}
     return pd.DataFrame(rows), stats
 
 

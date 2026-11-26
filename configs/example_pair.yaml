@@ -1,0 +1,45 @@
+# Minimal example: two synthetic connected lakes (NOT real SWOT data)
+seed: 42
+
+paths:
+  swot_csv: data/example/synthetic_two_lakes.csv
+  out_dir: outputs/example
+
+pair:
+  name: lakeA_minus_lakeB
+  lake_a: lakeA
+  lake_b: lakeB
+
+quality:
+  core: [0, 1]
+  flagged: [2, 3]
+  fill_value: -999.0
+
+reference_curve:
+  bin_width_m: 0.25
+  min_n_per_bin: 5
+  mad_scale: 1.4826
+  sigma_min_m: 0.02
+  leave_one_out: true
+
+detection_final:
+  h_threshold_m: -1.0e9
+  k_high: 3.5
+  k_low: 3.5
+
+detection:
+  k_values: [3.5]
+
+attribution:
+  neighbor_max_days: 30
+  quality_for_neighbors: [0, 1]
+  ambiguity_ratio: 1.5
+  mad_scale: 1.4826
+
+baseline_temporal:
+  k_values: [3.5]
+  k_report: 3.5
+  neighbor_max_days: 30
+  quality_for_neighbors: [0, 1]
+  mad_scale: 1.4826
+  sigma_min_m: 0.02

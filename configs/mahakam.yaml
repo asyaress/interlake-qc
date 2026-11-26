@@ -11,9 +11,9 @@ paths:
 
 pair:
   name: semayang_minus_melintang
-  danau_a: semayang
-  danau_b: melintang
-  danau_tri: jempang
+  lake_a: semayang
+  lake_b: melintang
+  lake_tri: jempang
 
 detection_final:
   h_threshold_m: 2.5
@@ -42,13 +42,13 @@ attribution:
   ambiguity_ratio: 1.5
   temporal_interpolation: linear
   mad_scale: 1.4826
-  order: [triangulasi, temporal]
+  order: [triangulation, temporal]
 
 triangulation:
   k_tri: 2.5
   pairs:
-    - {name: semayang_minus_jempang, danau_a: semayang, danau_b: jempang, points_to: semayang}
-    - {name: melintang_minus_jempang, danau_a: melintang, danau_b: jempang, points_to: melintang}
+    - {name: semayang_minus_jempang, lake_a: semayang, lake_b: jempang, points_to: semayang}
+    - {name: melintang_minus_jempang, lake_a: melintang, lake_b: jempang, points_to: melintang}
 
 baseline_temporal:
   k_values: [3.5]
@@ -58,7 +58,7 @@ baseline_temporal:
   mad_scale: 1.4826
   sigma_min_m: 0.02
 
-ketat:
+strict:
   quality_f: 0
   partial_f: 0
   dark_frac_max: 0.5
@@ -73,5 +73,5 @@ smoothness:
 
 jempang_pair:
   name: melintang_minus_jempang
-  danau_a: melintang
-  danau_b: jempang
+  lake_a: melintang
+  lake_b: jempang

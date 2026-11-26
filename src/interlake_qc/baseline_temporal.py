@@ -1,4 +1,4 @@
-"""B-temp — pembanding QC per-danau (satu deret waktu, tanpa tetangga antar-danau)."""
+"""B-temp — per-lake baseline QC (single time series, no inter-lake neighbor)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def _temporal_residuals_series(
     wse: np.ndarray,
     neighbor_max_sec: float,
 ) -> np.ndarray:
-    """Residu temporal untuk seluruh deret terurut (NaN bila tetangga tidak lengkap)."""
+    """Temporal residual for the full sorted series (NaN when neighbors incomplete)."""
     n = len(times)
     e = np.full(n, np.nan)
     t = times.astype("datetime64[ns]").astype(np.int64) / 1e9
@@ -59,10 +59,9 @@ def _temporal_residuals_series(
 def run_btemp(
     lake_df: pd.DataFrame,
     cfg_bt: dict,
-    k_values: list[float] | None = None,
-    danau: str = "",
+    k_values: list[float] | None = None, lake_name: str = "",
 ) -> pd.DataFrame:
-    """Tandai observasi bila |e_lake| > k × σ_lake."""
+    """Flag observation if |e_lake| > k × σ_lake."""
     k_values = k_values or list(cfg_bt["k_values"])
     q_ok = set(cfg_bt.get("quality_for_neighbors", [0, 1]))
     max_days = float(cfg_bt.get("neighbor_max_days", 30))
@@ -76,9 +75,9 @@ def run_btemp(
     d["quality_f"] = pd.to_numeric(d["quality_f"], errors="coerce")
     d = d.sort_values("time").reset_index(drop=True)
 
-    # Satu deret: tetangga hanya q_ok, tetapi semua titik dievaluasi.
-    # Bangun deret gabungan: semua titik, tapi saat residual, non-q_ok tidak jadi tetangga
-    # Implementasi praktis: hitung e pada q_ok; untuk non-q_ok sisipkan ke salinan q_ok.
+    # One series: neighbors are q_ok only, but all points are scored.
+    # Build combined series: all points; non-q_ok points are not used as neighbors for residuals
+    # Practical impl: compute e on q_ok; for non-q_ok, insert into a q_ok copy.
     d_nb = d[d["quality_f"].isin(q_ok)].reset_index(drop=True)
     if len(d_nb) == 0:
         return pd.DataFrame()
@@ -93,7 +92,7 @@ def run_btemp(
     if not np.isfinite(sig) or sig < sigma_min:
         sig = sigma_min
 
-    # kunci detik UTC
+    # UTC second key
     e_map = {
         int(pd.Timestamp(t).timestamp()): float(e)
         for t, e in zip(d_nb["time"], e_nb)
@@ -108,7 +107,7 @@ def run_btemp(
         if key in e_map:
             e = e_map[key]
         else:
-            # sisip target ke deret q_ok
+            # insert target into q_ok series
             times = list(d_nb["time"]) + [t_i]
             wses = list(d_nb["wse"].astype(float)) + [w_i]
             order = np.argsort([pd.Timestamp(x).timestamp() for x in times])
@@ -122,7 +121,7 @@ def run_btemp(
             e = float(e_all[pos])
         z = e / sig if np.isfinite(e) and sig > 0 else float("nan")
         rec = {
-            "danau": danau or d.loc[i].get("danau", ""),
+            "lake": lake_name or d.loc[i].get("lake", ""),
             "time": t_i,
             "wse": w_i,
             "quality_f": q_i,
@@ -144,8 +143,8 @@ def run_btemp_all_lakes(
 ) -> pd.DataFrame:
     frames = []
     for name in lakes:
-        sub = swot[swot["danau"] == name]
+        sub = swot[swot["lake"] == name]
         if len(sub) == 0:
             continue
-        frames.append(run_btemp(sub, cfg_bt, k_values=k_values, danau=name))
+        frames.append(run_btemp(sub, cfg_bt, k_values=k_values, lake_name=name))
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()

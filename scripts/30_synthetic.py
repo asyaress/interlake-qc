@@ -41,11 +41,13 @@ def main() -> int:
     else:
         tag = "full"
 
-    swot = pd.read_csv(REPO / cfg["paths"]["r2_swot_with_pass"])
+    from interlake_qc.schema import normalize_swot_frame
+    swot = normalize_swot_frame(pd.read_csv(REPO / cfg["paths"]["r2_swot_with_pass"]))
     swot["time"] = pd.to_datetime(swot["time"], utc=True, errors="coerce")
     pairs_path = REPO / cfg["paths"]["r4_pairs"]
+    from interlake_qc.schema import rename_columns
     if pairs_path.exists():
-        pairs = pd.read_csv(pairs_path)
+        pairs = rename_columns(pd.read_csv(pairs_path))
         pairs["time"] = pd.to_datetime(pairs["time"], utc=True)
     else:
         pairs = prepare_pair_table(swot, cfg)

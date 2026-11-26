@@ -1,4 +1,4 @@
-"""D2 v1 — deteksi pass janggal antar-danau + atribusi (leave-one-out)."""
+"""D2 v1 — detect anomalous same-pass inter-lake pairs + attribution (leave-one-out)."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def k_for_H(
     k_high: float = 3.5,
     k_low: float = 4.0,
 ) -> float:
-    """Ambang k per pita H: H >= threshold → k_high; H < threshold → k_low."""
+    """Band-dependent k: H >= threshold → k_high; H < threshold → k_low."""
     if not np.isfinite(H):
         return float(k_high)
     return float(k_high) if float(H) >= float(h_threshold) else float(k_low)
@@ -57,7 +57,7 @@ def _bin_edges(h: np.ndarray, width: float) -> np.ndarray:
 def merge_small_bins(
     edges: np.ndarray, counts: np.ndarray, min_n: int
 ) -> list[tuple[float, float]]:
-    """Gabung bin dengan n < min_n ke tetangga terdekat sampai n ≥ min_n."""
+    """Merge bins with n < min_n into the nearest neighbor until n ≥ min_n."""
     bins = [(float(edges[i]), float(edges[i + 1]), int(counts[i])) for i in range(len(counts))]
     if not bins:
         return []
@@ -67,7 +67,7 @@ def merge_small_bins(
         for i, (lo, hi, n) in enumerate(bins):
             if n >= min_n or len(bins) == 1:
                 continue
-            # tetangga terdekat: kiri atau kanan (pusat)
+            # nearest neighbor: left or right (by center)
             center = 0.5 * (lo + hi)
             candidates = []
             if i > 0:
@@ -93,7 +93,7 @@ def build_reference_bins(
     mad_scale: float = 1.4826,
     sigma_min: float = 0.02,
 ) -> pd.DataFrame:
-    """Bangun tabel bin: pusat, n, f=median dWSE, σ=1.4826×MAD residu (≥ sigma_min)."""
+    """Build bin table: center, n, f=median dWSE, σ=1.4826×MAD residual (≥ sigma_min)."""
     mask = np.isfinite(h) & np.isfinite(dwse)
     h = np.asarray(h, dtype=float)[mask]
     dwse = np.asarray(dwse, dtype=float)[mask]
@@ -140,7 +140,7 @@ def build_reference_bins(
 
 
 def interp_f_sigma(h_query: float, bins: pd.DataFrame) -> tuple[float, float]:
-    """Interpolasi linear f(H) dan σ(H) antar pusat bin."""
+    """Linear interpolation of f(H) and σ(H) between bin centers."""
     if bins is None or len(bins) == 0 or not np.isfinite(h_query):
         return float("nan"), float("nan")
     b = bins.sort_values("center")
@@ -160,9 +160,9 @@ def temporal_residual(
     idx: int,
     neighbor_max_days: float = 30.0,
 ) -> float:
-    """e = wse − interpolasi linear antara tetangga sebelum & sesudah (≤ neighbor_max_days).
+    """e = wse − linear interpolation between before & after neighbors (≤ neighbor_max_days).
 
-    Mengembalikan NaN bila tetangga tidak lengkap.
+    Returns NaN when neighbors are incomplete.
     """
     t = pd.to_datetime(times, utc=True).reset_index(drop=True)
     w = pd.to_numeric(wse, errors="coerce").reset_index(drop=True)
@@ -193,10 +193,10 @@ def attribute_source(
     cfg_attr: dict,
     sigma_cache: dict[str, float] | None = None,
 ) -> tuple[str, dict[str, float]]:
-    """Atribusi sumber untuk satu pass (waktu).
+    """Source attribution for one pass (time).
 
-    lake_series[name] harus punya kolom time, wse, quality_f (seluruh deret danau).
-    sigma_cache opsional: σ_lake yang sudah dihitung (hindari MAD ulang).
+    lake_series[name] must have columns time, wse, quality_f (full lake series).
+    optional sigma_cache: precomputed σ_lake (avoid recomputing MAD).
     """
     from interlake_qc.baseline_temporal import _temporal_residuals_series, _to_utc_naive
 
@@ -219,7 +219,7 @@ def attribute_source(
         d_nb = d[d["quality_f"].isin(q_ok)].sort_values("time").reset_index(drop=True)
         d_all = d.sort_values("time").reset_index(drop=True)
         if d_all.empty:
-            return "tak bisa diatribusi", {}
+            return "unattributed", {}
         diffs = (d_all["time"] - time_i).abs()
         i_all = int(diffs.idxmin())
         target_row = d_all.iloc[i_all]
@@ -264,14 +264,14 @@ def attribute_source(
         scores[name] = float("nan") if not np.isfinite(e) else abs(e) / sig
 
     if any(not np.isfinite(v) for v in scores.values()) or len(scores) < 2:
-        return "tak bisa diatribusi", details
+        return "unattributed", details
     ordered = sorted(scores.items(), key=lambda kv: -kv[1])
     best, s_best = ordered[0]
     _, s_second = ordered[1]
     if s_second <= 0:
         return best, details
     if s_best / s_second < ratio_thr:
-        return "ambigu", details
+        return "ambiguous", details
     return best, details
 
 
@@ -280,9 +280,9 @@ def prepare_pair_table(
     cfg: dict,
     phase_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Bangun tabel pass Semayang−Melintang dari SWOT per-obs."""
-    a = cfg["pair"]["danau_a"]
-    b = cfg["pair"]["danau_b"]
+    """Build Semayang−Melintang pass table from per-obs SWOT."""
+    a = cfg["pair"]["lake_a"]
+    b = cfg["pair"]["lake_b"]
     s = swot.copy()
     s["time"] = pd.to_datetime(s["time"], utc=True, errors="coerce")
     s["wse"] = pd.to_numeric(s["wse"], errors="coerce")
@@ -293,10 +293,10 @@ def prepare_pair_table(
     else:
         s["pass"] = ""
 
-    sa = s[s["danau"] == a][["time", "wse", "quality_f", "pass"]].rename(
+    sa = s[s["lake"] == a][["time", "wse", "quality_f", "pass"]].rename(
         columns={"wse": "wse_a", "quality_f": "q_a", "pass": "pass_a"}
     )
-    sb = s[s["danau"] == b][["time", "wse", "quality_f", "pass"]].rename(
+    sb = s[s["lake"] == b][["time", "wse", "quality_f", "pass"]].rename(
         columns={"wse": "wse_b", "quality_f": "q_b", "pass": "pass_b"}
     )
     # match within 120 s
@@ -332,7 +332,7 @@ def prepare_pair_table(
         return pairs
     pairs["day"] = pairs["time"].dt.strftime("%Y-%m-%d")
     pairs["core"] = pairs["q_a"].isin(cfg["quality"]["core"]) & pairs["q_b"].isin(cfg["quality"]["core"])
-    pairs["sudah_ditandai_flag"] = pairs["q_a"].isin(cfg["quality"]["flagged"]) | pairs["q_b"].isin(
+    pairs["already_quality_flagged"] = pairs["q_a"].isin(cfg["quality"]["flagged"]) | pairs["q_b"].isin(
         cfg["quality"]["flagged"]
     )
     if phase_df is not None and len(phase_df):
@@ -353,7 +353,15 @@ def run_d2(
     k_values: list[float] | None = None,
     do_attribution: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Jalankan D2 leave-one-out untuk semua k. Kembalikan (hasil per pass, tabel bin global info)."""
+    """Run leave-one-out D2 for all k. Return (per-pass results, global bin info table)."""
+    from interlake_qc.schema import rename_columns
+
+    pairs = rename_columns(pairs)
+    if "already_quality_flagged" not in pairs.columns and "sudah_ditandai_flag" in pairs.columns:
+        pairs = pairs.rename(columns={"sudah_ditandai_flag": "already_quality_flagged"})
+    if "already_quality_flagged" not in pairs.columns:
+        pairs = pairs.copy()
+        pairs["already_quality_flagged"] = False
     k_values = k_values or list(cfg["detection"]["k_values"])
     rc = cfg["reference_curve"]
     attr_cfg = {
@@ -396,10 +404,10 @@ def run_d2(
         z = (float(row["dWSE"]) - f_h) / sig_h if np.isfinite(f_h) and sig_h > 0 else float("nan")
 
         flags = {kk: bool(np.isfinite(z) and abs(z) > float(kk)) for kk in k_values}
-        sumber = ""
+        source= ""
         attr_detail: dict[str, float] = {}
         if do_attribution and any(flags.values()):
-            sumber, attr_detail = attribute_source(
+            source, attr_detail = attribute_source(
                 lake_series,
                 pd.Timestamp(row["time"]),
                 attr_cfg,
@@ -417,9 +425,9 @@ def run_d2(
             "q_a": row["q_a"],
             "q_b": row["q_b"],
             "core": bool(row["core"]),
-            "sudah_ditandai_flag": bool(row["sudah_ditandai_flag"]),
-            "fase": row.get("phase", ""),
-            "sumber": sumber,
+            "already_quality_flagged": bool(row["already_quality_flagged"]),
+            "phase": row.get("phase", ""),
+            "source": source,
         }
         for kk in k_values:
             rec[f"flag_k{kk}"] = flags[kk]
@@ -436,11 +444,11 @@ def run_d2_final(
     do_attribution: bool = True,
     swot: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """D2 dengan k per pita H (detection_final).
+    """D2 with band-dependent k H (detection_final).
 
-    Kolom utama: k_dipakai, flag, z, f_H, sigma_H, sumber_tri, sumber_temporal,
-    sumber_akhir, cara_atribusi. Jika swot diberikan dan triangulation ada di cfg,
-    atribusi = triangulasi dulu lalu temporal.
+    Main columns: k_used, flag, z, f_H, sigma_H, triangulation_source, temporal_source,
+    final_source, attribution_method. If swot is provided and triangulation is in cfg,
+    attribution = triangulation first, then temporal.
     """
     d = cfg.get("detection_final") or {}
     h_thr = float(d.get("h_threshold_m", 2.5))
@@ -454,20 +462,20 @@ def run_d2_final(
         do_attribution=do_attribution,
     )
     res = res.copy()
-    res["k_dipakai"] = [
+    res["k_used"] = [
         k_for_H(float(row["H"]), h_thr, k_high, k_low) for _, row in res.iterrows()
     ]
     res["flag"] = [
         bool(np.isfinite(float(z)) and abs(float(z)) > float(kk))
-        for z, kk in zip(res["z"], res["k_dipakai"])
+        for z, kk in zip(res["z"], res["k_used"])
     ]
 
-    # default temporal dari run_d2
-    res["sumber_temporal"] = [
+    # default temporal from run_d2
+    res["temporal_source"] = [
         str(s) if fl and str(s) not in ("", "nan", "None") else ("" if not fl else str(s))
-        for fl, s in zip(res["flag"], res.get("sumber", pd.Series([""] * len(res))))
+        for fl, s in zip(res["flag"], res.get("source", pd.Series([""] * len(res))))
     ]
-    # override temporal kosong pada flag
+    # fill empty temporal on flagged rows
     if do_attribution:
         attr_cfg = {**cfg["attribution"], "mad_scale": cfg["reference_curve"]["mad_scale"]}
         temps = []
@@ -475,17 +483,17 @@ def run_d2_final(
             if not bool(res.iloc[i]["flag"]):
                 temps.append("")
                 continue
-            src = str(res.iloc[i].get("sumber", "") or "")
+            src = str(res.iloc[i].get("source", "") or "")
             if src in ("", "nan", "None"):
                 src, _ = attribute_source(
                     lake_series, pd.Timestamp(res.iloc[i]["time"]), attr_cfg
                 )
             temps.append(src)
-        res["sumber_temporal"] = temps
+        res["temporal_source"] = temps
 
-    # triangulasi bila swot tersedia
-    sumber_tri: list[str] = []
-    sumber_akhir: list[str] = []
+    # triangulation when swot is available
+    triangulation_source: list[str] = []
+    final_source: list[str] = []
     cara: list[str] = []
     if do_attribution and swot is not None and "triangulation" in cfg:
         from interlake_qc.common import is_named_source
@@ -497,15 +505,15 @@ def run_d2_final(
         res_t = pd.to_datetime(res["time"], utc=True)
         for i in range(len(res)):
             if not bool(res.iloc[i]["flag"]):
-                sumber_tri.append("")
-                sumber_akhir.append("")
+                triangulation_source.append("")
+                final_source.append("")
                 cara.append("")
                 continue
             t = res_t.iloc[i]
             dt = (pairs_r["time"] - t).abs()
             j = int(dt.idxmin())
-            temp = res.iloc[i]["sumber_temporal"]
-            # hitung tri murni (tanpa fallback) untuk kolom sumber_tri
+            temp = res.iloc[i]["temporal_source"]
+            # compute pure tri (no fallback) for triangulation_source column
             k_tri = float(cfg["triangulation"]["k_tri"])
             hits = []
             for spec in cfg["triangulation"]["pairs"]:
@@ -517,45 +525,45 @@ def run_d2_final(
             hits = list(dict.fromkeys(hits))
             if len(hits) == 1:
                 tri_pure = hits[0]
-                sumber_tri.append(tri_pure)
-                sumber_akhir.append(tri_pure)
-                cara.append("triangulasi")
+                triangulation_source.append(tri_pure)
+                final_source.append(tri_pure)
+                cara.append("triangulation")
             else:
-                sumber_tri.append("")
+                triangulation_source.append("")
                 akhir = attribute_triangulation(
-                    j, pairs_r, res, tri_maps, cfg, float(res.iloc[i]["k_dipakai"]),
-                    temporal_sumber=temp,
+                    j, pairs_r, res, tri_maps, cfg, float(res.iloc[i]["k_used"]),
+                    temporal_source=temp,
                 )
-                sumber_akhir.append(akhir)
+                final_source.append(akhir)
                 if is_named_source(temp) and akhir == temp:
                     cara.append("temporal")
                 else:
-                    cara.append("ambigu" if akhir == "ambigu" else "temporal")
+                    cara.append("ambiguous" if akhir == "ambiguous" else "temporal")
     else:
         for i in range(len(res)):
             if not bool(res.iloc[i]["flag"]):
-                sumber_tri.append("")
-                sumber_akhir.append("")
+                triangulation_source.append("")
+                final_source.append("")
                 cara.append("")
             else:
-                sumber_tri.append("")
-                temp = res.iloc[i]["sumber_temporal"]
-                sumber_akhir.append(temp if temp else "ambigu")
-                cara.append("temporal" if temp and temp not in ("ambigu", "tak bisa diatribusi") else "ambigu")
+                triangulation_source.append("")
+                temp = res.iloc[i]["temporal_source"]
+                final_source.append(temp if temp else "ambiguous")
+                cara.append("temporal" if temp and temp not in ("ambiguous", "unattributed") else "ambiguous")
 
-    res["sumber_tri"] = sumber_tri
-    res["sumber_akhir"] = sumber_akhir
-    res["cara_atribusi"] = cara
+    res["triangulation_source"] = triangulation_source
+    res["final_source"] = final_source
+    res["attribution_method"] = cara
     return res, bins
 
 
 def attach_obs_qc(
     d2: pd.DataFrame,
     swot: pd.DataFrame,
-    danau_a: str,
-    danau_b: str,
+    lake_a: str,
+    lake_b: str,
 ) -> pd.DataFrame:
-    """Tambah quality_f & dark_frac kedua danau dari observasi SWOT terdekat (±120 s)."""
+    """Attach quality_f & dark_frac for both lakes from nearest SWOT obs (±120 s)."""
     sw = swot.copy()
     sw["time"] = pd.to_datetime(sw["time"], utc=True)
     sw["quality_f"] = pd.to_numeric(sw["quality_f"], errors="coerce")
@@ -564,11 +572,11 @@ def attach_obs_qc(
     out["time"] = pd.to_datetime(out["time"], utc=True)
     qa, qb, da, db = [], [], [], []
     for t in out["time"]:
-        for danau, qlist, dlist in (
-            (danau_a, qa, da),
-            (danau_b, qb, db),
+        for lake_name, qlist, dlist in (
+            (lake_a, qa, da),
+            (lake_b, qb, db),
         ):
-            sub = sw[sw["danau"] == danau]
+            sub = sw[sw["lake"] == lake_name]
             if sub.empty:
                 qlist.append(np.nan)
                 dlist.append(np.nan)

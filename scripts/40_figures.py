@@ -80,20 +80,22 @@ def fig_f2(out: Path) -> None:
 
 
 def fig_f3(out: Path) -> None:
-    sw = pd.read_csv(REPO / "data/processed/mahakam_swot_lakesp.csv")
+    from interlake_qc.schema import normalize_swot_frame
+    sw = normalize_swot_frame(pd.read_csv(REPO / "data/processed/mahakam_swot_lakesp.csv"))
     atl = pd.read_csv(REPO / "data/processed/mahakam_atl13_daily_v2.csv")
+    atl = atl.rename(columns={"danau": "lake", "tanggal": "date"})
     fl = pd.read_csv(REPO / "outputs/mahakam/r5_flagged_passes.csv")
     sw["time"] = pd.to_datetime(sw["time"], utc=True)
-    atl["tanggal"] = pd.to_datetime(atl["tanggal"], utc=True)
+    atl["date"] = pd.to_datetime(atl["date"], utc=True)
     fig, axes = plt.subplots(2, 1, figsize=(9, 6), sharex=True)
-    for ax, danau in zip(axes, ("semayang", "melintang")):
-        sub = sw[(sw["danau"] == danau) & sw["quality_f"].isin([0, 1])].sort_values("time")
+    for ax, lake_name in zip(axes, ("semayang", "melintang")):
+        sub = sw[(sw["lake"] == lake_name) & sw["quality_f"].isin([0, 1])].sort_values("time")
         ax.plot(sub["time"], sub["wse"], ".", ms=4, color="#4C78A8", label="SWOT")
-        a = atl[atl["danau"] == danau]
-        ax.plot(a["tanggal"], a["mean"], "s", ms=5, color="#54A24B", label="ATL13")
+        a = atl[atl["lake"] == lake_name]
+        ax.plot(a["date"], a["mean"], "s", ms=5, color="#54A24B", label="ATL13")
         for _, r in fl.iterrows():
-            ax.axvline(pd.Timestamp(r["tanggal"], tz="UTC"), color="#E45756", alpha=0.35, lw=1)
-        ax.set_ylabel(f"{danau} WSE (m)")
+            ax.axvline(pd.Timestamp(r["date"], tz="UTC"), color="#E45756", alpha=0.35, lw=1)
+        ax.set_ylabel(f"{lake_name} WSE (m)")
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=7, loc="best")
     axes[-1].set_xlabel("Time")
@@ -106,10 +108,10 @@ def fig_f4(out: Path) -> None:
     d2 = pd.read_csv(p)
     b = pd.read_csv(bins) if bins.exists() else pd.DataFrame()
     fig, ax = plt.subplots(figsize=(8, 5))
-    if "bermasalah" not in d2.columns:
-        d2["bermasalah"] = False
-    ok = d2[~d2["bermasalah"].astype(bool)]
-    bad = d2[d2["bermasalah"].astype(bool)]
+    if "anomalous" not in d2.columns:
+        d2["anomalous"] = False
+    ok = d2[~d2["anomalous"].astype(bool)]
+    bad = d2[d2["anomalous"].astype(bool)]
     ax.scatter(ok["H"], ok["dWSE"], c="#4C78A8", s=22, alpha=0.8, label="not anomalous")
     ax.scatter(bad["H"], bad["dWSE"], c="#E45756", s=30, alpha=0.9, label="anomalous (gage)")
     fl = d2[d2["flag"].astype(bool)]
@@ -134,35 +136,35 @@ def fig_f4(out: Path) -> None:
 def fig_f5(out: Path) -> None:
     m = pd.read_csv(REPO / "outputs/yahara/r7b_metrics.csv")
     sub = m[
-        (m["pasangan"] == "waubesa_minus_kegonsa")
-        & (m["peran"] == "utama")
+        (m["pair"] == "waubesa_minus_kegonsa")
+        & (m["role"] == "primary")
         & (m["T"] == 0.15)
         & (m["k"] == 3.5)
-        & (m["himpunan"] == "utama_ice0_q01")
+        & (m["subset"] == "primary_ice0_q01")
     ].copy()
-    order = ["q01", "ketat", "Btemp", "D2"]
-    sub["metode"] = pd.Categorical(sub["metode"], categories=order, ordered=True)
-    sub = sub.sort_values("metode")
+    order = ["q01", "strict", "Btemp", "D2"]
+    sub["method"] = pd.Categorical(sub["method"], categories=order, ordered=True)
+    sub = sub.sort_values("method")
     fig, axes = plt.subplots(1, 3, figsize=(10, 3.6))
     x = np.arange(len(sub))
     for ax, col, ylab in zip(
         axes,
-        ("presisi", "fpr", "frac_dipertahankan"),
+        ("precision", "fpr", "frac_retained"),
         ("Precision", "False positive rate", "Fraction retained"),
     ):
         y = pd.to_numeric(sub[col], errors="coerce")
         ax.bar(x, y, color="#4C78A8", alpha=0.85)
-        lo = pd.to_numeric(sub.get(f"{col}_lo", sub.get("presisi_lo")), errors="coerce") if col == "presisi" else None
-        if col == "presisi":
-            lo = pd.to_numeric(sub["presisi_lo"], errors="coerce")
-            hi = pd.to_numeric(sub["presisi_hi"], errors="coerce")
+        lo = pd.to_numeric(sub.get(f"{col}_lo", sub.get("precision_lo")), errors="coerce") if col == "precision" else None
+        if col == "precision":
+            lo = pd.to_numeric(sub["precision_lo"], errors="coerce")
+            hi = pd.to_numeric(sub["precision_hi"], errors="coerce")
             ax.errorbar(x, y, yerr=[y - lo, hi - y], fmt="none", ecolor="k", capsize=3)
         elif col == "fpr":
             lo = pd.to_numeric(sub["fpr_lo"], errors="coerce")
             hi = pd.to_numeric(sub["fpr_hi"], errors="coerce")
             ax.errorbar(x, y, yerr=[y - lo, hi - y], fmt="none", ecolor="k", capsize=3)
         ax.set_xticks(x)
-        ax.set_xticklabels(sub["metode"].astype(str), rotation=20)
+        ax.set_xticklabels(sub["method"].astype(str), rotation=20)
         ax.set_ylabel(ylab)
         ax.set_ylim(0, 1.05)
         ax.grid(True, axis="y", alpha=0.3)

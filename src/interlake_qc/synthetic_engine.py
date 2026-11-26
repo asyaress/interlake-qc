@@ -1,4 +1,4 @@
-"""S1 (sisip ke data nyata non-sirkular) dan S2 (sintetis penuh)."""
+"""S1 (inject into non-circular real data) and S2 (full synthetic)."""
 
 from __future__ import annotations
 
@@ -20,11 +20,11 @@ def _tri_maps_with_inject(
     signs: dict[int, float],
     delta: float,
 ) -> dict[str, pd.DataFrame]:
-    """Geser z pasangan-Jempang untuk pass tersisip: ΔdWSE = ±δ pada danau yang diubah.
+    """Shift Jempang-pair z for injected passes: ΔdWSE = ±δ on the altered lake.
 
     Semayang−Jempang: inject Semayang → dWSE += s·δ
     Melintang−Jempang: inject Melintang → dWSE += s·δ
-    f(H), σ(H) tetap (aproksimasi LOO lokal; Jempang tidak berubah).
+    f(H), σ(H) held fixed (local LOO approximation; Jempang unchanged).
     """
     out = {k: v.copy() for k, v in tri_maps.items()}
     for i, lake in inj_lake.items():
@@ -119,10 +119,10 @@ def generate_s2_truth(
     common_sd: float,
     noise: bool = True,
 ) -> pd.DataFrame:
-    """Bangun muka air sintetis: Melintang=asli; Semayang=Mel+g(H); derau opsional."""
+    """Build synthetic WSE: Melintang=truth; Semayang=Mel+g(H); optional noise."""
     out = pairs_core.copy().reset_index(drop=True)
     mel_true = out["wse_b"].to_numpy(dtype=float)
-    # H untuk g = muka air benar Melintang (sesuai prompt)
+    # H for g = Melintang truth water level (per prompt)
     g, sig = interp_truth(mel_true, bins)
     sem_true = mel_true + g
     n = len(out)
@@ -145,7 +145,7 @@ def generate_s2_truth(
     out["q_a"] = 0
     out["q_b"] = 0
     out["core"] = True
-    out["sudah_ditandai_flag"] = False
+    out["already_quality_flagged"] = False
     if "phase" not in out.columns:
         out["phase"] = ""
     return out
@@ -157,11 +157,11 @@ def run_s1(
     cfg: dict,
     seed: int = 42,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """S1: sisip ke data nyata tanpa pra-penyaringan z/B-temp."""
+    """S1: inject into real data without pre-filtering z/B-temp."""
     d2cfg = d2_cfg_from_d2b(cfg)
-    danau_a = cfg["pair"]["danau_a"]
-    danau_b = cfg["pair"]["danau_b"]
-    lakes = [danau_a, danau_b]
+    lake_a = cfg["pair"]["lake_a"]
+    lake_b = cfg["pair"]["lake_b"]
+    lakes = [lake_a, lake_b]
     k_d2 = [float(x) for x in cfg["detection"]["k_values"]]
     k_bt = [float(x) for x in cfg["baseline_temporal"]["k_values"]]
     deltas = [float(x) for x in cfg["synthetic"]["deltas_m"]]
@@ -175,7 +175,7 @@ def run_s1(
     n_inject = max(1, int(round(frac * n)))
     print(f"S1: n_core={n} n_inject/trial={n_inject} n_ulang={n_ulang}", flush=True)
 
-    lake0 = {danau_a: swot[swot["danau"] == danau_a].copy(), danau_b: swot[swot["danau"] == danau_b].copy()}
+    lake0 = {lake_a: swot[swot["lake"] == lake_a].copy(), lake_b: swot[swot["lake"] == lake_b].copy()}
     d2_base, _ = run_d2(pairs, lake0, d2cfg, k_values=k_d2, do_attribution=True)
     bt_base = run_btemp_all_lakes(swot, lakes, cfg["baseline_temporal"], k_values=k_bt)
     d2_base["time"] = pd.to_datetime(d2_base["time"], utc=True)
@@ -194,7 +194,7 @@ def run_s1(
             t = pairs.loc[i, "time"]
             for lake in lakes:
                 sub = bt_base[
-                    (bt_base["danau"] == lake) & ((bt_base["time"] - t).abs() <= pd.Timedelta(seconds=120))
+                    (bt_base["lake"] == lake) & ((bt_base["time"] - t).abs() <= pd.Timedelta(seconds=120))
                 ]
                 if len(sub) and bool(sub.iloc[0][fcol]):
                     flags[i] = True
@@ -219,7 +219,7 @@ def run_s1(
             pairs_m = pairs.copy()
             for i, lake in inj_lake.items():
                 s = signs[i]
-                if lake == danau_a:
+                if lake == lake_a:
                     pairs_m.loc[i, "wse_a"] = float(pairs_m.loc[i, "wse_a"]) + s * delta
                 else:
                     pairs_m.loc[i, "wse_b"] = float(pairs_m.loc[i, "wse_b"]) + s * delta
@@ -229,20 +229,20 @@ def run_s1(
             sw = swot0.copy()
             for i, lake in inj_lake.items():
                 t = pairs.loc[i, "time"]
-                m = (sw["danau"] == lake) & ((sw["time"] - t).abs() <= pd.Timedelta(seconds=120))
+                m = (sw["lake"] == lake) & ((sw["time"] - t).abs() <= pd.Timedelta(seconds=120))
                 sw.loc[m, "wse"] = sw.loc[m, "wse"] + signs[i] * delta
 
-            lake_m = {danau_a: sw[sw["danau"] == danau_a], danau_b: sw[sw["danau"] == danau_b]}
+            lake_m = {lake_a: sw[sw["lake"] == lake_a], lake_b: sw[sw["lake"] == lake_b]}
             d2_m, _ = run_d2(pairs_m, lake_m, d2cfg, k_values=k_d2, do_attribution=False)
             bt_m = run_btemp_all_lakes(sw, lakes, cfg["baseline_temporal"], k_values=k_bt)
             d2_m["time"] = pd.to_datetime(d2_m["time"], utc=True)
             bt_m["time"] = pd.to_datetime(bt_m["time"], utc=True)
             sigma_cache = {
-                name: float(bt_m.loc[bt_m["danau"] == name, "sigma_lake"].iloc[0])
+                name: float(bt_m.loc[bt_m["lake"] == name, "sigma_lake"].iloc[0])
                 for name in lakes
-                if (bt_m["danau"] == name).any()
+                if (bt_m["lake"] == name).any()
             }
-            # tri_maps disesuaikan: hanya z pasangan yang melibatkan danau tersisip digeser δ/σ
+            # adjust tri_maps: only z for pairs involving the injected lake are shifted by δ/σ
             tri_maps_m = _tri_maps_with_inject(tri_maps, pairs, inj_lake, signs, delta)
 
             for kk in k_d2:
@@ -261,14 +261,14 @@ def run_s1(
                                 _acc(stats, key, n_detect=1)
                                 _acc(stats, key, n_flagged_for_attr=1)
                                 t = pairs.loc[i, "time"]
-                                sumber, _ = attribute_source(lake_m, t, attr_cfg, sigma_cache=sigma_cache)
-                                if is_named_source(sumber):
+                                source, _ = attribute_source(lake_m, t, attr_cfg, sigma_cache=sigma_cache)
+                                if is_named_source(source):
                                     _acc(stats, key, n_attr_named=1)
-                                    if sumber == inj_lake[i]:
+                                    if source== inj_lake[i]:
                                         _acc(stats, key, n_attr_ok=1)
                                 _acc(stats, key, n_tri_flagged=1)
                                 tri_src = attribute_triangulation(
-                                    i, pairs_m, d2_m, tri_maps_m, cfg, kk, temporal_sumber=sumber
+                                    i, pairs_m, d2_m, tri_maps_m, cfg, kk, temporal_source=source
                                 )
                                 if is_named_source(tri_src):
                                     _acc(stats, key, n_tri_named=1)
@@ -289,28 +289,28 @@ def run_s1(
                         if band_of(float(pairs.loc[i, "H"])) != band:
                             continue
                         t = pairs.loc[i, "time"]
-                        # B-temp per observasi danau yang di-inject, atau kedua danau untuk FP
+                        # B-temp per injected-lake observation, or both lakes for FP
                         if i in inj_set:
                             lake = inj_lake[i]
                             _acc(stats, key, n_inject=1)
                             sub = bt_m[
-                                (bt_m["danau"] == lake)
+                                (bt_m["lake"] == lake)
                                 & ((bt_m["time"] - t).abs() <= pd.Timedelta(seconds=120))
                             ]
                             if len(sub) and bool(sub.iloc[0][fcol]):
                                 _acc(stats, key, n_detect=1)
                         else:
-                            # per-observasi: kedua danau
+                            # per-observation: both lakes
                             for lake in lakes:
                                 _acc(stats, key, n_noninject=1)
                                 sub = bt_m[
-                                    (bt_m["danau"] == lake)
+                                    (bt_m["lake"] == lake)
                                     & ((bt_m["time"] - t).abs() <= pd.Timedelta(seconds=120))
                                 ]
                                 new_f = len(sub) > 0 and bool(sub.iloc[0][fcol])
                                 # base flag for this lake-obs
                                 sub0 = bt_base[
-                                    (bt_base["danau"] == lake)
+                                    (bt_base["lake"] == lake)
                                     & ((bt_base["time"] - t).abs() <= pd.Timedelta(seconds=120))
                                 ]
                                 base_f = len(sub0) > 0 and bool(sub0.iloc[0][flag_col(bt_base, kk)])
@@ -355,11 +355,11 @@ def run_s2(
     cfg: dict,
     seed: int = 42,
 ) -> pd.DataFrame:
-    """S2: sintetis penuh dengan kebenaran diketahui + common-mode."""
+    """S2: full synthetic with known truth + common-mode."""
     d2cfg = d2_cfg_from_d2b(cfg)
-    danau_a = cfg["pair"]["danau_a"]
-    danau_b = cfg["pair"]["danau_b"]
-    lakes = [danau_a, danau_b]
+    lake_a = cfg["pair"]["lake_a"]
+    lake_b = cfg["pair"]["lake_b"]
+    lakes = [lake_a, lake_b]
     k_d2 = [float(x) for x in cfg["detection"]["k_values"]]
     k_bt = [float(x) for x in cfg["baseline_temporal"]["k_values"]]
     deltas = [float(x) for x in cfg["synthetic"]["deltas_m"]]
@@ -393,7 +393,7 @@ def run_s2(
 
                 for i, lake in inj_lake.items():
                     s = signs[i]
-                    if lake == danau_a:
+                    if lake == lake_a:
                         pairs.loc[i, "wse_a"] = float(pairs.loc[i, "wse_a"]) + s * delta
                     else:
                         pairs.loc[i, "wse_b"] = float(pairs.loc[i, "wse_b"]) + s * delta
@@ -405,21 +405,21 @@ def run_s2(
                 for i in range(n):
                     t = pairs.loc[i, "time"]
                     rows_sw.append(
-                        {"danau": danau_a, "time": t, "wse": float(pairs.loc[i, "wse_a"]), "quality_f": 0}
+                        {"lake": lake_a, "time": t, "wse": float(pairs.loc[i, "wse_a"]), "quality_f": 0}
                     )
                     rows_sw.append(
-                        {"danau": danau_b, "time": t, "wse": float(pairs.loc[i, "wse_b"]), "quality_f": 0}
+                        {"lake": lake_b, "time": t, "wse": float(pairs.loc[i, "wse_b"]), "quality_f": 0}
                     )
                 sw = pd.DataFrame(rows_sw)
-                lake_m = {danau_a: sw[sw["danau"] == danau_a], danau_b: sw[sw["danau"] == danau_b]}
+                lake_m = {lake_a: sw[sw["lake"] == lake_a], lake_b: sw[sw["lake"] == lake_b]}
                 d2_m, _ = run_d2(pairs, lake_m, d2cfg, k_values=k_d2, do_attribution=False)
                 bt_m = run_btemp_all_lakes(sw, lakes, cfg["baseline_temporal"], k_values=k_bt)
                 d2_m["time"] = pd.to_datetime(d2_m["time"], utc=True)
                 bt_m["time"] = pd.to_datetime(bt_m["time"], utc=True)
                 sigma_cache = {
-                    name: float(bt_m.loc[bt_m["danau"] == name, "sigma_lake"].iloc[0])
+                    name: float(bt_m.loc[bt_m["lake"] == name, "sigma_lake"].iloc[0])
                     for name in lakes
-                    if (bt_m["danau"] == name).any()
+                    if (bt_m["lake"] == name).any()
                 }
                 attr_cache: dict = {}
 
@@ -443,10 +443,10 @@ def run_s2(
                                         attr_cache[t], _ = attribute_source(
                                             lake_m, t, attr_cfg, sigma_cache=sigma_cache
                                         )
-                                    sumber = attr_cache[t]
-                                    if is_named_source(sumber):
+                                    source= attr_cache[t]
+                                    if is_named_source(source):
                                         _acc(stats, key, n_attr_named=1)
-                                        if sumber == inj_lake[i]:
+                                        if source== inj_lake[i]:
                                             _acc(stats, key, n_attr_ok=1)
                             else:
                                 _acc(stats, key, n_noninject=1)
@@ -466,7 +466,7 @@ def run_s2(
                                 lake = inj_lake[i]
                                 _acc(stats, key, n_inject=1)
                                 sub = bt_m[
-                                    (bt_m["danau"] == lake)
+                                    (bt_m["lake"] == lake)
                                     & ((bt_m["time"] - t).abs() <= pd.Timedelta(seconds=120))
                                 ]
                                 if len(sub) and bool(sub.iloc[0][fcol]):
@@ -475,7 +475,7 @@ def run_s2(
                                 for lake in lakes:
                                     _acc(stats, key, n_noninject=1)
                                     sub = bt_m[
-                                        (bt_m["danau"] == lake)
+                                        (bt_m["lake"] == lake)
                                         & ((bt_m["time"] - t).abs() <= pd.Timedelta(seconds=120))
                                     ]
                                     if len(sub) and bool(sub.iloc[0][fcol]):
