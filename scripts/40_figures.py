@@ -12,7 +12,7 @@ import pandas as pd
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from interlake_qc.d2_interlake import interp_f_sigma, k_for_H  # noqa: E402
+from interlake_qc.core import interp_f_sigma, k_for_H  # noqa: E402
 
 
 def _save(fig: plt.Figure, out: Path, stem: str) -> None:

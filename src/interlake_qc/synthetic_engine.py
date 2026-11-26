@@ -8,9 +8,9 @@ import numpy as np
 import pandas as pd
 
 from interlake_qc.baseline_temporal import run_btemp_all_lakes
-from interlake_qc.d2_interlake import attribute_source, run_d2
-from interlake_qc.d2b_common import band_of, d2_cfg_from_d2b, flag_col, interp_truth, is_named_source, truth_curve_table
-from interlake_qc.d2b_tri import attribute_triangulation, build_jempang_pair_results
+from interlake_qc.core import attribute_source, run_d2
+from interlake_qc.common import band_of, d2_cfg_from_d2b, flag_col, interp_truth, is_named_source, truth_curve_table
+from interlake_qc.triangulation import attribute_triangulation, build_jempang_pair_results
 
 
 def _tri_maps_with_inject(

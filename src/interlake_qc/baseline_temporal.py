@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from interlake_qc.d2_interlake import mad
+from interlake_qc.core import mad
 
 
 def _to_utc_naive(times) -> np.ndarray:

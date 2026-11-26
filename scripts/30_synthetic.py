@@ -12,8 +12,8 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from interlake_qc.d2_interlake import prepare_pair_table  # noqa: E402
-from interlake_qc.d2b_synth import run_s1, run_s2  # noqa: E402
+from interlake_qc.core import prepare_pair_table  # noqa: E402
+from interlake_qc.synthetic_engine import run_s1, run_s2  # noqa: E402
 
 
 def main() -> int:

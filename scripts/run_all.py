@@ -1,4 +1,4 @@
-"""Offline pipeline: 20 → 21 → 30 --quick → 40. Prints stage timings."""
+"""Offline pipeline: 20 → 21 → 22 → 23 → 30 --quick → 40. Full synth is NOT included."""
 from __future__ import annotations
 
 import shutil
@@ -27,6 +27,8 @@ def main() -> int:
     times = {}
     times["20_mahakam"] = run_stage("20_run_mahakam", ["scripts/20_run_mahakam.py"])
     times["21_yahara"] = run_stage("21_run_yahara", ["scripts/21_run_yahara.py"])
+    times["22_sensitivity"] = run_stage("22_sensitivity_mahakam", ["scripts/22_sensitivity_mahakam.py"])
+    times["23_evidence"] = run_stage("23_evidence_tables", ["scripts/23_evidence_tables.py"])
     times["30_synth_quick"] = run_stage("30_synthetic", ["scripts/30_synthetic.py", "--quick"])
     times["40_figures"] = run_stage("40_figures", ["scripts/40_figures.py"])
     print("\nTiming summary:", flush=True)

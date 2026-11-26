@@ -4,7 +4,7 @@ from __future__ import annotations
 import pandas as pd
 
 from interlake_qc.io_usgs_release import norm_gage_id
-from interlake_qc.r7_yahara import d_preferred_else_c, dedup_prefer_D
+from interlake_qc.validation_yahara import d_preferred_else_c, dedup_prefer_D
 
 
 def test_eccc_gage_keys_distinct():

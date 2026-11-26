@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from interlake_qc.d2_interlake import prepare_pair_table, run_d2
-from interlake_qc.d2b_common import d2_cfg_from_d2b, flag_col, is_named_source
+from interlake_qc.core import prepare_pair_table, run_d2
+from interlake_qc.common import d2_cfg_from_d2b, flag_col, is_named_source
 
 
 def build_jempang_pair_results(swot: pd.DataFrame, cfg: dict) -> dict[str, pd.DataFrame]:
@@ -81,7 +81,7 @@ def apply_tri_to_real_flags(
     k_values: list[float],
 ) -> pd.DataFrame:
     """Untuk data nyata: isi kolom sumber_tri per k pada pass tertandai."""
-    from interlake_qc.d2_interlake import attribute_source
+    from interlake_qc.core import attribute_source
 
     tri_maps = build_jempang_pair_results(swot, cfg)
     danau_a = cfg["pair"]["danau_a"]

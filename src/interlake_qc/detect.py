@@ -1,7 +1,7 @@
 """z-score detection with band-dependent or uniform k."""
 from __future__ import annotations
 
-from interlake_qc.d2_interlake import (  # noqa: F401
+from interlake_qc.core import (  # noqa: F401
     attach_obs_qc,
     k_for_H,
     k_for_H_from_cfg,

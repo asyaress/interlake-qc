@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from interlake_qc.d2_interlake import mad, run_d2_final
+from interlake_qc.core import mad, run_d2_final
 
 
 LAKE_ORDER = ["mendota", "monona", "waubesa", "kegonsa"]

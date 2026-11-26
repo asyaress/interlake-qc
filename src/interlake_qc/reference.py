@@ -1,7 +1,7 @@
 """Reference curve f(H), sigma(H): bins, merge, MAD, interpolation."""
 from __future__ import annotations
 
-from interlake_qc.d2_interlake import (  # noqa: F401
+from interlake_qc.core import (  # noqa: F401
     _bin_edges,
     build_reference_bins,
     interp_f_sigma,

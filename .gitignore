@@ -10,6 +10,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
+*.egg-info/
 .DS_Store
 _bootstrap_f6a.py
 _patch_*.py

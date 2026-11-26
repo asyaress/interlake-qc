@@ -7,7 +7,7 @@ from interlake_qc.baseline_temporal import (  # noqa: F401
     run_btemp,
     run_btemp_all_lakes,
 )
-from interlake_qc.r5_ablation import mask_ketat, mask_q01, wse_valid  # noqa: F401
+from interlake_qc.validation_mahakam import mask_ketat, mask_q01, wse_valid  # noqa: F401
 
 __all__ = [
     "run_btemp",

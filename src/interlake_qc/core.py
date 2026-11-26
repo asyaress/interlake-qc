@@ -488,8 +488,8 @@ def run_d2_final(
     sumber_akhir: list[str] = []
     cara: list[str] = []
     if do_attribution and swot is not None and "triangulation" in cfg:
-        from interlake_qc.d2b_common import is_named_source
-        from interlake_qc.d2b_tri import attribute_triangulation, build_jempang_pair_results
+        from interlake_qc.common import is_named_source
+        from interlake_qc.triangulation import attribute_triangulation, build_jempang_pair_results
 
         tri_maps = build_jempang_pair_results(swot, cfg)
         pairs_r = pairs.reset_index(drop=True).copy()
@@ -509,7 +509,7 @@ def run_d2_final(
             k_tri = float(cfg["triangulation"]["k_tri"])
             hits = []
             for spec in cfg["triangulation"]["pairs"]:
-                from interlake_qc.d2b_tri import _z_at_time
+                from interlake_qc.triangulation import _z_at_time
 
                 z = _z_at_time(tri_maps.get(spec["name"], pd.DataFrame()), t)
                 if np.isfinite(z) and abs(z) > k_tri:

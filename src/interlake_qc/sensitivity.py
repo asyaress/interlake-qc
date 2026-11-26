@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from interlake_qc.d2_interlake import (
+from interlake_qc.core import (
     build_reference_bins,
     interp_f_sigma,
     k_for_H,

@@ -17,8 +17,8 @@ sys.path.insert(0, str(REPO / 'src'))
 sys.path.insert(0, str(REPO))
 
 from interlake_qc.baseline_temporal import run_btemp_all_lakes  # noqa: E402
-from interlake_qc.d2_interlake import interp_f_sigma, load_d2_config  # noqa: E402
-from interlake_qc.r7_yahara import (  # noqa: E402
+from interlake_qc.core import interp_f_sigma, load_d2_config  # noqa: E402
+from interlake_qc.validation_yahara import (  # noqa: E402
     attribution_rows,
     build_pair_table,
     compute_bias_and_ec,
@@ -126,7 +126,7 @@ def plot_z_vs_edwse(all_merged: pd.DataFrame, k: float, T: float, out: Path) -> 
 
 
 def run_one_d2(pairs, swot, base_d2, pair_spec, det, do_attr=True):
-    from interlake_qc.d2_interlake import run_d2_final
+    from interlake_qc.core import run_d2_final
 
     cfg = make_d2_cfg(base_d2, pair_spec, det, {})
     # temporal hanya A/B; danau_tri tetap tersedia via swot untuk triangulasi
@@ -233,7 +233,7 @@ def tri_coverage(pairs_main: pd.DataFrame, gage: pd.DataFrame, tri_lake: str, ma
 
 
 def mad_arr(x):
-    from interlake_qc.d2_interlake import mad
+    from interlake_qc.core import mad
 
     return mad(np.asarray(x, dtype=float))
 

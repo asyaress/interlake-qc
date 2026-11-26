@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from interlake_qc.baseline_temporal import _temporal_residuals_series, _to_utc_naive
-from interlake_qc.d2_interlake import mad
+from interlake_qc.core import mad
 
 
 def wse_valid(df: pd.DataFrame, fill: float = -999.0) -> pd.Series:

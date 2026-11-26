@@ -1,0 +1,41 @@
+# R6 — OAT sensitivity + stability (seed=42; defaults from mahakam.yaml)
+seed: 42
+
+paths:
+  d2_final: configs/mahakam.yaml
+  r2_swot_with_pass: data/processed/mahakam_swot_lakesp.csv
+  r4_pairs: data/processed/mahakam_pairs.csv
+  r3_dwse_with_phase: data/processed/mahakam_dwse_phase.csv
+  out_dir: outputs/mahakam
+
+defaults:
+  bin_width_m: 0.25
+  min_n_per_bin: 5
+  sigma_min_m: 0.02
+  h_threshold_m: 2.5
+  k_high: 3.5
+  k_low: 4.0
+
+oat:
+  bin_width_m: [0.20, 0.25, 0.33]
+  min_n_per_bin: [5, 8]
+  sigma_min_m: [0.01, 0.02, 0.03]
+  h_threshold_m: [2.25, 2.5, 2.75]
+  k_high: [3.0, 3.5, 4.0]
+  k_low: [3.5, 4.0, 4.5]
+
+s1_compact:
+  n_ulang: 50
+  deltas_m: [0.20, 0.30]
+  fraction_inject: 0.10
+
+loyo:
+  years: [2023, 2024, 2025, 2026]
+
+by_pass:
+  passes: ["284", "437"]
+
+runtime:
+  d2_repeats: 10
+  s1_n_ulang: 200
+  s1_delta: 0.20

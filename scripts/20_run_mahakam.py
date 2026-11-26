@@ -14,7 +14,7 @@ sys.path.insert(0, str(REPO / 'src'))
 sys.path.insert(0, str(REPO))
 
 from interlake_qc.baseline_temporal import run_btemp_all_lakes  # noqa: E402
-from interlake_qc.d2_interlake import (  # noqa: E402
+from interlake_qc.core import (  # noqa: E402
     attach_obs_qc,
     interp_f_sigma,
     k_for_H,
@@ -22,7 +22,7 @@ from interlake_qc.d2_interlake import (  # noqa: E402
     prepare_pair_table,
     run_d2_final,
 )
-from interlake_qc.r5_ablation import (  # noqa: E402
+from interlake_qc.validation_mahakam import (  # noqa: E402
     atl13_swot_metrics,
     build_variant_masks,
     mask_ketat,
@@ -295,12 +295,8 @@ def main() -> int:
     swot["time"] = pd.to_datetime(swot["time"], utc=True, errors="coerce")
     phase_path = REPO / cfg["paths"]["r3_dwse_with_phase"]
     phase_df = pd.read_csv(phase_path) if phase_path.exists() else None
-    pairs_path = REPO / cfg["paths"]["r4_pairs"]
-    if pairs_path.exists():
-        pairs = pd.read_csv(pairs_path)
-        pairs["time"] = pd.to_datetime(pairs["time"], utc=True)
-    else:
-        pairs = prepare_pair_table(swot, cfg, phase_df=phase_df)
+    # Always build pairs from SWOT (+ phase); mahakam_pairs.csv is regression reference only
+    pairs = prepare_pair_table(swot, cfg, phase_df=phase_df)
 
     lakes = {
         cfg["pair"]["danau_a"]: swot[swot["danau"] == cfg["pair"]["danau_a"]].copy(),

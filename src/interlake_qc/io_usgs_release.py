@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from interlake_qc.r7_yahara import d_preferred_else_c, dedup_prefer_D
+from interlake_qc.validation_yahara import d_preferred_else_c, dedup_prefer_D
 
 
 def norm_gage_id(agency: str, gage_id: str) -> tuple[str, str]:

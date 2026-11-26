@@ -1,14 +1,14 @@
 """Validation metrics vs in-situ truth: Wilson CI, RMSE/MAD, attribution scores."""
 from __future__ import annotations
 
-from interlake_qc.r5_ablation import (  # noqa: F401
+from interlake_qc.validation_mahakam import (  # noqa: F401
     atl13_swot_metrics,
     build_variant_masks,
     interlake_atl13_metric,
     run_ablation_table,
     smoothness_metrics,
 )
-from interlake_qc.r7_yahara import (  # noqa: F401
+from interlake_qc.validation_yahara import (  # noqa: F401
     attribution_rows,
     compute_bias_and_ec,
     d_preferred_else_c,
