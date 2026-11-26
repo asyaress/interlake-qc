@@ -1,0 +1,77 @@
+# Mahakam (Semayang−Melintang) — locked D2 final parameters
+seed: 42
+
+paths:
+  r2_swot_with_pass: data/processed/mahakam_swot_lakesp.csv
+  r2_atl13_interlake: data/processed/mahakam_atl13_interlake.csv
+  r1_atl13_daily_v2: data/processed/mahakam_atl13_daily_v2.csv
+  r3_dwse_with_phase: data/processed/mahakam_dwse_phase.csv
+  r4_pairs: data/processed/mahakam_pairs.csv
+  out_dir: outputs/mahakam
+
+pair:
+  name: semayang_minus_melintang
+  danau_a: semayang
+  danau_b: melintang
+  danau_tri: jempang
+
+detection_final:
+  h_threshold_m: 2.5
+  k_high: 3.5
+  k_low: 4.0
+  selection_rule: "k smallest with true FPR <= 5% for all c (S2)"
+
+quality:
+  core: [0, 1]
+  flagged: [2, 3]
+  fill_value: -999.0
+
+reference_curve:
+  bin_width_m: 0.25
+  min_n_per_bin: 5
+  mad_scale: 1.4826
+  sigma_min_m: 0.02
+  leave_one_out: true
+
+detection:
+  k_values: [2.5, 3.0, 3.5, 4.0]
+
+attribution:
+  neighbor_max_days: 30
+  quality_for_neighbors: [0, 1]
+  ambiguity_ratio: 1.5
+  temporal_interpolation: linear
+  mad_scale: 1.4826
+  order: [triangulasi, temporal]
+
+triangulation:
+  k_tri: 2.5
+  pairs:
+    - {name: semayang_minus_jempang, danau_a: semayang, danau_b: jempang, points_to: semayang}
+    - {name: melintang_minus_jempang, danau_a: melintang, danau_b: jempang, points_to: melintang}
+
+baseline_temporal:
+  k_values: [3.5]
+  k_report: 3.5
+  neighbor_max_days: 30
+  quality_for_neighbors: [0, 1]
+  mad_scale: 1.4826
+  sigma_min_m: 0.02
+
+ketat:
+  quality_f: 0
+  partial_f: 0
+  dark_frac_max: 0.5
+
+coincidence:
+  atl13_swot_days: 3
+  atl13_interlake_days: 10
+
+smoothness:
+  neighbor_max_days: 30
+  mad_scale: 1.4826
+
+jempang_pair:
+  name: melintang_minus_jempang
+  danau_a: melintang
+  danau_b: jempang

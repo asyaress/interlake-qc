@@ -1,0 +1,97 @@
+# Parameter R4b — sintetis non-sirkular, triangulasi Jempang, cek air rendah
+seed: 42
+
+paths:
+  r2_swot_with_pass: data/processed/mahakam_swot_lakesp.csv
+  r2_atl13_interlake: data/processed/mahakam_atl13_interlake.csv
+  r3_lakesp_attrs: outputs/audit/r3_lakesp_attrs.csv
+  r3_dwse_with_phase: data/processed/mahakam_dwse_phase.csv
+  r3_hydrocron_consistency_bad: outputs/audit/r3_hydrocron_consistency_bad.csv
+  r4_pairs: data/processed/mahakam_pairs.csv
+  r4_reference_bins: reference/r5_reference_bins.csv
+  r4_d2_real: outputs/audit/r4_d2_real.csv
+  out_dir: outputs/synthetic
+
+pair:
+  name: semayang_minus_melintang
+  danau_a: semayang
+  danau_b: melintang
+  danau_tri: jempang
+
+quality:
+  core: [0, 1]
+  flagged: [2, 3]
+
+# Mesin D2 sama seperti R4
+reference_curve:
+  bin_width_m: 0.25
+  min_n_per_bin: 5
+  mad_scale: 1.4826
+  sigma_min_m: 0.02
+  leave_one_out: true
+
+detection:
+  k_values: [2.5, 3.0, 3.5, 4.0]
+
+attribution:
+  neighbor_max_days: 30
+  quality_for_neighbors: [0, 1]
+  ambiguity_ratio: 1.5
+  temporal_interpolation: linear
+  mad_scale: 1.4826
+
+triangulation:
+  k_tri: 2.5
+  # pasangan untuk z-tri: Semayang−Jempang dan Melintang−Jempang
+  pairs:
+    - {name: semayang_minus_jempang, danau_a: semayang, danau_b: jempang, points_to: semayang}
+    - {name: melintang_minus_jempang, danau_a: melintang, danau_b: jempang, points_to: melintang}
+
+baseline_temporal:
+  k_values: [2.5, 3.0, 3.5, 4.0]
+  neighbor_max_days: 30
+  quality_for_neighbors: [0, 1]
+  mad_scale: 1.4826
+  sigma_min_m: 0.02
+
+# truth_curve dibekukan dari R4 (reference/r5_reference_bins.csv)
+truth_curve:
+  source: reference/r5_reference_bins.csv
+  source_note: "R4 leave-one-out global bins (median dWSE & σ per bin H), frozen for S2"
+  bins:
+    - {center: 1.500, f: -0.3090, sigma: 0.054115}
+    - {center: 1.875, f: -0.3900, sigma: 0.154190}
+    - {center: 2.125, f: -0.1520, sigma: 0.112678}
+    - {center: 2.375, f: -0.0450, sigma: 0.026687}
+    - {center: 2.625, f: -0.0130, sigma: 0.038548}
+    - {center: 2.875, f: -0.0110, sigma: 0.102299}
+    - {center: 3.125, f: -0.0410, sigma: 0.020000}
+    - {center: 3.375, f: -0.0160, sigma: 0.028169}
+    - {center: 3.625, f: -0.0240, sigma: 0.022239}
+    - {center: 3.875, f: -0.0130, sigma: 0.020000}
+    - {center: 4.125, f: -0.0090, sigma: 0.020000}
+    - {center: 4.375, f: -0.0290, sigma: 0.020000}
+    - {center: 4.625, f: -0.0150, sigma: 0.028169}
+    - {center: 5.000, f: -0.0235, sigma: 0.020000}
+    - {center: 5.875, f: -0.0460, sigma: 0.047443}
+
+synthetic:
+  n_ulang: 200
+  fraction_inject: 0.10
+  deltas_m: [0.05, 0.10, 0.20, 0.30, 0.50]
+  # S2
+  student_t_df: 3
+  common_mode_sd_m: [0.0, 0.05, 0.10]
+  report_k: [3.0, 3.5]
+  plot_k: 3.0
+
+lowwater:
+  atl13_window_days: 10
+  h_bands:
+    - {label: "H<2.5", max_exclusive: 2.5}
+    - {label: "H>=2.5", min_inclusive: 2.5}
+  anomaly_date: "2025-08-05"
+  pair_name: semayang_minus_melintang
+
+real:
+  report_k: [3.0, 3.5]

@@ -1,0 +1,115 @@
+# Yahara chain validation (amendment_1: P2 primary)
+seed: 42
+
+paths:
+  d2_final: configs/mahakam.yaml
+  gage_csv: data/processed/yahara_usgs_subset.csv
+  # sites_csv optional for processed subset
+  out_dir: outputs/yahara
+
+lakes:
+  mendota:  {lake_id: "7421069523", gage_id: "05428000"}
+  monona:   {lake_id: "7421069562", gage_id: "05429000"}
+  waubesa:  {lake_id: "7421071452", gage_id: "05429485"}
+  kegonsa:  {lake_id: "7421071552", gage_id: "425715089164700"}
+
+exclude_lake_ids: ["7421071062"]
+
+detection_main:
+  h_threshold_m: -1.0e9
+  k_high: 3.5
+  k_low: 3.5
+detection_sens_k4:
+  h_threshold_m: -1.0e9
+  k_high: 4.0
+  k_low: 4.0
+
+main_set:
+  quality_f: [0, 1]
+  ice_clim_f: 0
+  version: D
+  p1_min_q01_d_only: 60
+  fallback_version_policy: "D_preferred_else_C"
+
+pair_match:
+  max_dt_sec: 120
+
+# History (prompt 12, pre-amendment) — do not delete
+pairs_v0:
+  P1:
+    name: monona_minus_waubesa
+    danau_a: monona
+    danau_b: waubesa
+    danau_tri: kegonsa
+    peran: utama_v0
+  P2:
+    name: waubesa_minus_kegonsa
+    danau_a: waubesa
+    danau_b: kegonsa
+    danau_tri: monona
+    peran: sekunder_v0
+  P3:
+    name: mendota_minus_monona
+    danau_a: mendota
+    danau_b: monona
+    danau_tri: waubesa
+    peran: sekunder_v0
+
+pairs:
+  P1:
+    name: monona_minus_waubesa
+    danau_a: monona
+    danau_b: waubesa
+    danau_tri: kegonsa
+  P2:
+    name: waubesa_minus_kegonsa
+    danau_a: waubesa
+    danau_b: kegonsa
+    danau_tri: monona
+  P3:
+    name: mendota_minus_monona
+    danau_a: mendota
+    danau_b: monona
+    danau_tri: waubesa
+
+truth:
+  max_gage_dt_hours: 24
+  T_main: 0.15
+  T_sens: [0.10, 0.25]
+
+ketat:
+  quality_f: 0
+  partial_f: 0
+  dark_frac_max: 0.5
+
+fill_values: [-999, -999.0, -9999, -9999.0]
+
+min_p1_main_with_truth: 40
+
+amendment_1:
+  date: "2026-11-25"
+  reason: "P1 39<40; Monona = small PLD 0.67 km2; fixed before D2 results"
+  primary_pair: P2
+  stop_pair: P2
+  min_primary_main_with_truth: 40
+  version_policy: "D_preferred_else_C"
+  sensitivity_version_D_only: true
+  pairs:
+    P2:
+      name: waubesa_minus_kegonsa
+      danau_a: waubesa
+      danau_b: kegonsa
+      danau_tri: mendota
+      peran: utama
+    P1:
+      name: monona_minus_waubesa
+      danau_a: monona
+      danau_b: waubesa
+      danau_tri: kegonsa
+      peran: objek_kecil
+    P3:
+      name: mendota_minus_monona
+      danau_a: mendota
+      danau_b: monona
+      danau_tri: waubesa
+      peran: objek_kecil

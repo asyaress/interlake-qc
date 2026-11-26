@@ -1,0 +1,38 @@
+# Locked InterLake-QC parameters (Fase 6a). Do not change for reproduction.
+seed: 42
+
+reference_curve:
+  bin_width_m: 0.25
+  min_n_per_bin: 5
+  mad_scale: 1.4826
+  sigma_min_m: 0.02
+  leave_one_out: true
+
+attribution:
+  k_tri: 2.5
+  ambiguity_ratio: 1.5
+  neighbor_max_days: 30
+  quality_for_neighbors: [0, 1]
+
+baseline_temporal:
+  k: 3.5
+  neighbor_max_days: 30
+  quality_for_neighbors: [0, 1]
+  mad_scale: 1.4826
+  sigma_min_m: 0.02
+
+ketat:
+  quality_f: 0
+  partial_f: 0
+  dark_frac_max: 0.5
+
+same_pass_max_dt_sec: 120
+
+mahakam:
+  h_threshold_m: 2.5
+  k_high: 3.5
+  k_low: 4.0
+
+yahara:
+  k_uniform: 3.5
+  k_sensitivity: 4.0

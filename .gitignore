@@ -1,0 +1,15 @@
+data/raw/
+outputs/
+.venv/
+venv/
+.netrc
+_netrc
+*.env
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+_bootstrap_f6a.py
+_patch_*.py

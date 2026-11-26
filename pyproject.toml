@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "interlake-qc"
+version = "0.1.0"
+description = "Same-pass inter-lake consistency check (InterLake-QC) for SWOT lake water levels"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12,<3.13"
+authors = [{ name = "Supriyanto and contributors" }]
+dependencies = [
+  "numpy",
+  "pandas",
+  "PyYAML",
+  "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+interlake-qc = "interlake_qc.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
