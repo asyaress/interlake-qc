@@ -2,7 +2,7 @@
 
 **Same-pass inter-lake consistency check (InterLake-QC)** for SWOT lake water-surface elevation (WSE).
 
-Article title (locked): *Gauge-free quality control of SWOT lake water levels using same-pass consistency between connected lakes*.
+Associated article (in preparation): *Gauge-free quality control of SWOT lake water levels using same-pass consistency between connected lakes*.
 
 InterLake-QC flags SWOT lake observations that are inconsistent with a same-pass partner lake after removing the expected stage-dependent offset. It is intended for **hydraulically connected lakes observed on the same SWOT pass** (shared cycle/pass or |\Delta t| ≤ 120 s).
 
@@ -33,13 +33,13 @@ pip install -e .
 Processed inputs are already under `data/processed/` (no download required):
 
 ```bash
-python scripts/run_all.py          # ~15 min on a typical laptop (R6 OAT dominates)
+python scripts/run_all.py          # ≈15–25 min (R6 sensitivity dominates)
 pytest -m "not slow"
 # Optional full synthetic (S1+S2, ~90 min):
 # python scripts/31_synthetic_full.py && pytest -m slow
 ```
 
-Test machine reference (F6a-2 / F6b): Windows, Python 3.12.6; `run_all` ≈ 15 minutes; full synthetic ≈ 90 minutes.
+Test machine reference (F6a-2 / F6b): Windows, Python 3.12.6; `run_all` ≈15–25 min (R6 sensitivity dominates; clean-clone verification ≈24 min); full synthetic ≈90 minutes.
 
 ### New lake pair (minimal)
 
@@ -79,18 +79,21 @@ See `CITATION.cff`. After the Zenodo release DOI is minted, add it to this secti
 | Product | Source | Notes |
 |---------|--------|-------|
 | Yahara SWOT–gage pairs | Harlan et al. 2026, doi:[10.5066/P1FE9W9E](https://doi.org/10.5066/P1FE9W9E) | CC0; subset of four lake IDs in `data/processed/` |
-| SWOT LakeSP (version D) | Hydrocron timeseries API | Mahakam lakes |
-| ICESat-2 ATL13 v007 | NASA Earthdata | Daily V2 QC means |
+| SWOT LakeSP Prior (version D) | Hydrocron timeseries API; doi:[10.5067/SWOT-LAKESP-D](https://doi.org/10.5067/SWOT-LAKESP-D) | Mahakam lakes; CMR `SWOT_L2_HR_LakeSP_prior_D` |
+| ICESat-2 ATL13 v007 | NASA NSIDC DAAC; doi:[10.5067/ATLAS/ATL13.007](https://doi.org/10.5067/ATLAS/ATL13.007) | Daily V2 QC means |
 
-NASA data: see [NASA Earthdata data use policy](https://www.earthdata.nasa.gov/learn/use-data) (no separate license name asserted here).
+NASA Earth science data are freely available to all users; NASA ESDS encourages citation and acknowledgment of the data used (see [ESDS Open Data, Services, and Software Policies](https://www.earthdata.nasa.gov/engage/open-data-services-software)).
 
 OpenStreetMap polygons are **not** used in this package’s offline processed inputs or detection code; no OSM attribution is required for the committed demo/repro data.
 
 ## Limitations
 
-- Common-mode errors that shift both lakes equally are not detectable from dWSE alone.
-- Ice-affected seasons require explicit ice filtering (as in the Yahara main set).
-- Very low water on Mahakam: reference curve not validated below about ±1.75 m stage band extremes used in the study.
+- Requires hydraulically connected lakes observed on the same SWOT pass, with enough same-pass pairs to populate the stage bins (*n_min* = 5 per bin after merging).
+- Common-mode errors shifting both lakes equally are not detectable from dWSE.
+- Lake attribution is secondary and reliable mainly for errors of roughly ≥0.3 m.
+- Weakly coupled pairs (e.g., Melintang–Jempang) have wide σ(H) and low sensitivity.
+- Mahakam: below ≈1.75 m stage the reference curve is built only from SWOT observations with high dark-water fraction and has no independent ICESat-2 check.
+- Ice seasons need explicit filtering; gauge truth under ice is also uncertain.
 - Yahara anomalous counts are small; Wilson intervals are wide.
 
 ## License

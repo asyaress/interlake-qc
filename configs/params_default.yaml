@@ -1,4 +1,4 @@
-# Locked InterLake-QC parameters (Fase 6a). Do not change for reproduction.
+# Locked InterLake-QC parameters (v0.1.0). Do not change for reproduction.
 seed: 42
 
 reference_curve:
