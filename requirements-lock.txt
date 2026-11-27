@@ -3,8 +3,6 @@ contourpy==1.4.0
 cycler==0.12.1
 fonttools==4.69.1
 iniconfig==2.3.1
-# Editable install with no version control (interlake-qc==0.1.0)
--e d:\a. paper\mtehodsx-nasa\interlake-qc
 kiwisolver==1.5.1
 matplotlib==3.11.2
 numpy==2.5.5
