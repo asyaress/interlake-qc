@@ -3,6 +3,8 @@ message: "If you use InterLake-QC, please cite it as below."
 type: software
 title: "InterLake-QC: same-pass inter-lake consistency check for SWOT lake water levels"
 version: "1.0.0"
+date-released: "2026-11-27"
+doi: "10.5281/zenodo.24588066"
 license: MIT
 repository-code: "https://github.com/asyaress/interlake-qc"
 authors:
@@ -29,3 +31,7 @@ keywords:
   - inter-lake consistency
   - remote sensing
   - InterLake-QC
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.24588066"
+    description: "Archived release v1.0.0 (Zenodo)"

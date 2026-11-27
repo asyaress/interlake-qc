@@ -1,5 +1,7 @@
 # InterLake-QC
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24588066.svg)](https://doi.org/10.5281/zenodo.24588066)
+
 **Same-pass inter-lake consistency check (InterLake-QC)** for SWOT lake water-surface elevation (WSE).
 
 Associated article (in preparation): *Gauge-free quality control of SWOT lake water levels using same-pass consistency between connected lakes*.
@@ -39,7 +41,7 @@ pytest -m "not slow"
 # python scripts/31_synthetic_full.py && pytest -m slow
 ```
 
-Test machine reference (F6a-2 / F6b): Windows, Python 3.12.6; `run_all` ≈15–25 min (R6 sensitivity dominates; clean-clone verification ≈24 min); full synthetic ≈90 minutes.
+Test machine reference: Windows, Python 3.12.6; `run_all` ≈15–25 min (R6 sensitivity dominates; clean-clone verification ≈24 min); full synthetic ≈90 minutes.
 
 ### New lake pair (minimal)
 
@@ -60,7 +62,11 @@ Corresponding author: Supriyanto Supriyanto (Universitas Mulawarman).
 
 ## How to cite
 
-See `CITATION.cff`. After the Zenodo release DOI is minted, add it to this section and to `CITATION.cff` (see `docs/RELEASE_CHECKLIST.md`).
+If you use InterLake-QC, please cite the archived release:
+
+Supriyanto, S., Supriyanto, M. I. A., Sari, C. M., & Fahrezy, A. S. (2026). *InterLake-QC: same-pass inter-lake consistency check for SWOT lake water levels* (Version v1.0.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.24588066
+
+Machine-readable metadata: `CITATION.cff`. Please also cite the datasets listed under **Data**.
 
 ## Outputs → manuscript
 
